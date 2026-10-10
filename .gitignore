@@ -1,0 +1,40 @@
+# --- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Secrets: API keys live only in .env (template: .env.example) ----------
+.env
+
+# --- Run artifacts: regenerate with `make all` -----------------------------
+# Results that the paper needs are copied into paper/tables and paper/figures
+# by scripts/make_report_tables.py, so outputs/ itself is never committed.
+outputs/*
+!outputs/.gitkeep
+
+# Optional large sample file (python scripts/generate_sample_data.py --intraday)
+data/sample/intraday.csv
+
+# --- LaTeX build products (compile with `make paper`) ----------------------
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+paper/*.pdf
+
+# --- Editors / OS ------------------------------------------------------------
+.DS_Store
+.vscode/
+.idea/
+
+# --- Local scratch, not part of the project ---------------------------------
+scratch/

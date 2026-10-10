@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RobustHFT-AgentLab — Architecture & System Explainer</title>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-green: #4ade80;
+      --accent-red: #f87171;
+      --accent-purple: #c084fc;
+      --accent-amber: #fbbf24;
+      --border-color: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    header h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(to right, var(--accent-blue), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+    }
+
+    .badge-bar {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--accent-blue);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .badge.green {
+      background: rgba(74, 222, 128, 0.1);
+      color: var(--accent-green);
+      border-color: rgba(74, 222, 128, 0.3);
+    }
+
+    .badge.amber {
+      background: rgba(251, 191, 36, 0.1);
+      color: var(--accent-amber);
+      border-color: rgba(251, 191, 36, 0.3);
+    }
+
+    section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
+
+    section h2 {
+      font-size: 1.6rem;
+      margin-bottom: 1rem;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+
+    .card h3 {
+      font-size: 1.2rem;
+      margin-bottom: 0.75rem;
+      color: var(--accent-blue);
+    }
+
+    .card.paper h3 {
+      color: var(--accent-amber);
+    }
+
+    .card.our h3 {
+      color: var(--accent-green);
+    }
+
+    ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+
+    li {
+      margin-bottom: 0.6rem;
+      position: relative;
+      padding-left: 1.25rem;
+      color: var(--text-muted);
+    }
+
+    li::before {
+      content: "•";
+      color: var(--accent-blue);
+      font-weight: bold;
+      position: absolute;
+      left: 0;
+    }
+
+    .interactive-demo {
+      background: #0f172a;
+      border-radius: 8px;
+      padding: 1.5rem;
+      border: 1px solid var(--border-color);
+    }
+
+    .control-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .control-group label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 0.5rem;
+    }
+
+    .slider {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border-color);
+      outline: none;
+      accent-color: var(--accent-blue);
+    }
+
+    .status-box {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .status-blocked {
+      background: rgba(74, 222, 128, 0.15);
+      color: var(--accent-green);
+      border: 1px solid var(--accent-green);
+    }
+
+    .status-fooled {
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--accent-red);
+      border: 1px solid var(--accent-red);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.9rem;
+    }
+
+    th {
+      background: rgba(15, 23, 42, 0.8);
+      color: var(--accent-blue);
+    }
+
+    tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Diagram visualizer */
+    .flow-diagram {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding: 1rem 0;
+    }
+
+    .flow-step {
+      background: var(--bg-primary);
+      border: 1px solid var(--accent-blue);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      text-align: center;
+      min-width: 140px;
+      flex-shrink: 0;
+    }
+
+    .flow-step h4 {
+      font-size: 0.85rem;
+      color: var(--accent-blue);
+      margin-bottom: 0.25rem;
+    }
+
+    .flow-step p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .flow-arrow {
+      color: var(--text-muted);
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-color);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>RobustHFT-AgentLab (`rhal`)</h1>
+      <p>Interactive System Architecture & Defensive Red-Teaming Explainer</p>
+      <div class="badge-bar">
+        <span class="badge">B.Tech Project</span>
+        <span class="badge green">Base Paper: AutoRedTrader (arXiv:2605.09185)</span>
+        <span class="badge amber">Offline & Deterministic</span>
+      </div>
+    </header>
+
+    <!-- SECTION 1: System Data Flow -->
+    <section>
+      <h2>⚙️ System Architecture & Data Flow</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+        Every trading day \(t\), news item updates and market time-series flow through the pipeline to drive paired shadow (clean) and treated (attacked) agents in lockstep.
+      </p>
+
+      <div class="flow-diagram">
+        <div class="flow-step">
+          <h4>1. Data Layer</h4>
+          <p>OHLCV + Clean News</p>
+        </div>
+        <div class="flow-arrow">➔</div>
+        <div class="flow-step" style="border-color: var(--accent-red);">
+          <h4>2. MisGen Attack</h4>
+          <p>Pólya-Urn Perturbations</p>
+        </div>
+        <div class="flow-arrow">➔</div>
+        <div class="flow-step">
+          <h4>3. Retrieval Memory</h4>
+          <p>Date-gated Visible Pool</p>
+        </div>
+        <div class="flow-arrow">➔</div>
+        <div class="flow-step" style="border-color: var(--accent-purple);">
+          <h4>4. Grounding Stack</h4>
+          <p>30-Day Analogs & Consistency</p>
+        </div>
+        <div class="flow-arrow">➔</div>
+        <div class="flow-step" style="border-color: var(--accent-green);">
+          <h4>5. Risk Layer</h4>
+          <p>Hold-on-Conflict & Sizing</p>
+        </div>
+        <div class="flow-arrow">➔</div>
+        <div class="flow-step">
+          <h4>6. Paired Execution</h4>
+          <p>Slippage & PnL Accounting</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: Base Paper vs Extensions -->
+    <section>
+      <h2>🔬 Base Paper vs. Our Extensions</h2>
+      <div class="grid-2">
+        <div class="card paper">
+          <h3>📄 Base Paper (AutoRedTrader)</h3>
+          <ul>
+            <li><strong>MisGen Engine</strong>: 3-way attack space (Bias Context + 8 Minor Perturbations + Style Rewrites).</li>
+            <li><strong>Pólya-Urn Sampler</strong>: Reinforcement sampling where successful decision-flipping strategies get boosted.</li>
+            <li><strong>Quality Filters</strong>: Similarity (\(A_{\text{sim}}\)) & Detectability (\(A_{\text{det}}\)) gates to maintain plausibility.</li>
+            <li><strong>Attacker Focus</strong>: Maximizes Attack Success Rate (ASR) to find LLM vulnerabilities.</li>
+          </ul>
+        </div>
+
+        <div class="card our">
+          <h3>🚀 Our Extensions (RobustHFT-AgentLab)</h3>
+          <ul>
+            <li><strong>Temporal Grounding</strong>: 30-day historical analogs with strict admissibility (\(e + H \le t\)) to prevent lookahead.</li>
+            <li><strong>Microstructure Features</strong>: High-frequency proxies (Garman-Klass RV, Order Flow Imbalance, Amihud illiquidity).</li>
+            <li><strong>Explicit Risk Layer</strong>: Post-policy confidence gates, Hold-on-Conflict rules, volatility sizing, drawdown throttle.</li>
+            <li><strong>Methodological Rigor</strong>: Introduced <strong>Placebo Arm</strong> and <strong>Net ASR</strong> to eliminate structural retrieval noise.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: Interactive Defense Demo -->
+    <section>
+      <h2>🎛️ Interactive Defense Mechanism Simulator</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        Adjust the sliders below to see how our **Temporal Grounding** (\(\kappa\)) and **Risk Layer** protect the agent when fake news contradicts real market momentum.
+      </p>
+
+      <div class="interactive-demo">
+        <div class="control-group">
+          <label>Injected Fake News Sentiment (Positive = Bullish Fake Claim): <span id="val-news" style="color:var(--accent-blue);">+0.80</span></label>
+          <input type="range" id="slider-news" class="slider" min="-1" max="1" step="0.1" value="0.8">
+        </div>
+
+        <div class="control-group">
+          <label>Actual Market Time-Series Momentum (Negative = Bearish Reality): <span id="val-mkt" style="color:var(--accent-amber);">-0.60</span></label>
+          <input type="range" id="slider-mkt" class="slider" min="-1" max="1" step="0.1" value="-0.6">
+        </div>
+
+        <div class="control-group">
+          <label>Grounding Strength (\(\kappa\)): <span id="val-kappa" style="color:var(--accent-purple);">0.70</span></label>
+          <input type="range" id="slider-kappa" class="slider" min="0" max="1" step="0.1" value="0.7">
+        </div>
+
+        <div style="margin-top: 1rem; font-size: 0.9rem;">
+          <p>Text–Market Consistency Score (\(c\)): <strong id="res-c" style="color:var(--accent-blue);">0.30</strong></p>
+          <p>Grounded Signal (\(s_g\)): <strong id="res-sg">0.00</strong></p>
+        </div>
+
+        <div id="status-indicator" class="status-box status-blocked">
+          🛡️ ATTACK BLOCKED: Risk layer detected signal conflict (Hold-on-Conflict triggered). Position held safely.
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: Empirical Results -->
+    <section>
+      <h2>📊 Empirical Benchmark Results</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Defence Arm</th>
+            <th>Raw ASR (%)</th>
+            <th>Net ASR (%)</th>
+            <th>Clean Return (%)</th>
+            <th>Max Drawdown (%)</th>
+            <th>Hold Rate (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Undefended (none)</strong></td>
+            <td>35.0 ± 6.4</td>
+            <td>13.7 ± 6.4</td>
+            <td>+4.3 ± 5.7</td>
+            <td>-3.5 ± 1.1</td>
+            <td>30.7 ± 4.4</td>
+          </tr>
+          <tr>
+            <td><strong>Grounded</strong></td>
+            <td>21.7 ± 4.7</td>
+            <td>6.0 ± 7.2</td>
+            <td>-0.8 ± 2.7</td>
+            <td>-5.8 ± 2.3</td>
+            <td>23.0 ± 4.9</td>
+          </tr>
+          <tr style="background: rgba(74, 222, 128, 0.05);">
+            <td><strong style="color: var(--accent-green);">Grounded + Risk Layer (Full)</strong></td>
+            <td style="color: var(--accent-green);">25.3 ± 6.4</td>
+            <td style="color: var(--accent-green);">8.7 ± 6.1</td>
+            <td>+0.8 ± 4.4</td>
+            <td style="color: var(--accent-green);">-3.4 ± 0.9</td>
+            <td>34.7 ± 10.5</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      RobustHFT-AgentLab (`rhal`) • B.Tech Project • Offline Research Framework
+    </footer>
+  </div>
+
+  <script>
+    const sNews = document.getElementById('slider-news');
+    const sMkt = document.getElementById('slider-mkt');
+    const sKappa = document.getElementById('slider-kappa');
+
+    const vNews = document.getElementById('val-news');
+    const vMkt = document.getElementById('val-mkt');
+    const vKappa = document.getElementById('val-kappa');
+
+    const resC = document.getElementById('res-c');
+    const resSg = document.getElementById('res-sg');
+    const statusInd = document.getElementById('status-indicator');
+
+    function updateSimulation() {
+      const s_text = parseFloat(sNews.value);
+      const s_mkt = parseFloat(sMkt.value);
+      const kappa = parseFloat(sKappa.value);
+
+      vNews.textContent = (s_text >= 0 ? '+' : '') + s_text.toFixed(2);
+      vMkt.textContent = (s_mkt >= 0 ? '+' : '') + s_mkt.toFixed(2);
+      vKappa.textContent = kappa.toFixed(2);
+
+      // Consistency formula: c = 1 - |s_text - s_mkt| / 2
+      const c = 1.0 - Math.abs(s_text - s_mkt) / 2.0;
+      // Grounded signal formula: s_g = s_text - kappa * (1 - c) * (s_text - s_mkt)
+      const s_g = s_text - kappa * (1.0 - c) * (s_text - s_mkt);
+
+      resC.textContent = c.toFixed(2);
+      resSg.textContent = (s_g >= 0 ? '+' : '') + s_g.toFixed(2);
+
+      // Conflict condition: sign disagreement between text and market
+      const hasConflict = (s_text * s_mkt < 0) && (Math.abs(s_text) > 0.2) && (Math.abs(s_mkt) > 0.2);
+
+      if (hasConflict && kappa > 0.3) {
+        statusInd.className = 'status-box status-blocked';
+        statusInd.innerHTML = '🛡️ <strong>ATTACK BLOCKED</strong>: High conflict detected between text (' + s_text + ') and market (' + s_mkt + '). Hold-on-Conflict activated!';
+      } else if (Math.abs(s_g) < 0.25) {
+        statusInd.className = 'status-box status-blocked';
+        statusInd.innerHTML = '🛡️ <strong>ATTACK NEUTRALIZED</strong>: Grounding shrunk the fake news sentiment close to 0. Agent defaulted to Hold.';
+      } else {
+        statusInd.className = 'status-box status-fooled';
+        statusInd.innerHTML = '⚠️ <strong>AGENT FOOLED</strong>: Attack succeeded! Weak grounding allowed fake news to flip agent action to ' + (s_g > 0 ? 'BUY' : 'SELL') + '.';
+      }
+    }
+
+    sNews.addEventListener('input', updateSimulation);
+    sMkt.addEventListener('input', updateSimulation);
+    sKappa.addEventListener('input', updateSimulation);
+
+    updateSimulation();
+  </script>
+</body>
+</html>

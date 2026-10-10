@@ -1,0 +1,93 @@
+# RobustHFT-AgentLab default configuration.
+# Every experiment arm and ablation is expressed as an override of this file.
+# SAFETY: this framework runs offline simulations only. Nothing here connects to a broker.
+
+seed: 42
+output_dir: outputs
+
+data:
+  source: synthetic            # synthetic | csv | yfinance
+  csv_prices: data/sample/prices.csv
+  csv_news: data/sample/news.csv
+  symbol: SYNTH
+  n_days: 400                  # synthetic history length (first ~250 = warmup/analog library)
+  eval_days: 60                # trading days evaluated (paper: 60 BTC days)
+  news_per_day: 5
+  intraday:
+    enabled: false             # HFT-inspired toy mode (synthetic minute bars aggregated to daily micro features)
+    bars_per_day: 78           # 6.5h * 12 five-minute bars
+
+features:
+  vol_window: 5                # paper: 5-day rolling std
+  drawdown_window: 20          # paper: 20-day max drawdown
+  short_trend: 5
+  long_trend: 20
+  anomaly_window: 20
+  micro:
+    enabled: true              # HFT/microstructure proxies (our extension)
+    rv_window: 5
+    volume_window: 20
+
+grounding:
+  enabled: true                # time-series-informed grounding (paper §2.3)
+  window: 30                   # paper: 30-day windows
+  top_k: 5
+  horizon: 5                   # analog forward-outcome horizon (must be fully in the past)
+  strength: 0.7                # kappa: how strongly inconsistent text is shrunk toward market evidence
+
+retrieval:
+  method: tfidf                # tfidf | bm25 | embed (embed requires sentence-transformers)
+  top_k: 4                     # docs retrieved per decision step
+  recency_days: 3              # only news within this many days is retrievable
+  recency_decay: 0.5           # score *= decay^(age_days)
+
+misgen:
+  enabled: true
+  mode: mock                   # mock | llm   (llm requires provider != mock)
+  bias_prob: 0.7               # p in Algorithm 1
+  use_bias: true
+  use_minor: true
+  use_rewrite: true
+  use_filter: true
+  use_feedback: true           # history-aware Polya-urn sampler
+  alpha: 1.0                   # reinforcement strength w = 1 + alpha*h
+  delta: 0.15                  # return-dependent bias boost
+  max_tries: 3                 # K in Algorithm 1
+  sim_threshold: 0.35          # tau_sim on TF-IDF cosine
+  det_threshold: null          # tau_det; null = detector's FPR-calibrated threshold
+  injection_ratio: 1.0         # synthetic docs per clean doc
+  placebo: false               # if true, inject benign paraphrases (noise-floor control)
+
+agent:
+  mode: mock                   # rule | mock | llm
+  action_threshold: 0.15       # |signal| above which the agent acts
+  text_weight: 0.75            # ungrounded agent leans on text (mirrors LLM overreaction)
+  memory_len: 5
+  reflection: true
+  adaptive_trust: false        # long-term memory modulates text reliance (our extension; ablation knob)
+
+risk:
+  enabled: true
+  max_position: 1.0            # fraction of equity
+  vol_target: 0.015            # daily vol target for position scaling (median vol_5 ~0.013)
+  stop_loss: 0.06
+  take_profit: 0.12
+  hold_on_conflict: true
+  conflict_threshold: 0.6      # consistency below this -> hold (|text-market| > 0.8)
+  min_confidence: 0.3
+  drawdown_throttle: 0.10      # halve size when DD exceeds this
+
+backtest:
+  initial_cash: 100000.0
+  fee_bps: 10                  # 0.10% per trade
+  slippage_bps: 5
+  execution: next_open         # decisions at close t execute at open t+1 (no lookahead)
+
+experiment:
+  n_seeds: 5
+  arms:                        # standard comparison arms
+    - clean
+    - injected
+    - injected_grounded
+    - injected_grounded_risk
+    - placebo

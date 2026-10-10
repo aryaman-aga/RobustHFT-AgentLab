@@ -1,0 +1,626 @@
+% ============================================================
+%  RobustHFT-AgentLab — IEEE Conference Paper
+%  Target: IEEE SSCI / IEEE Transactions on Fuzzy Systems
+%  Compile with tectonic:  tectonic ieee_paper.tex
+%  Compile with pdflatex:  latexmk -pdf ieee_paper
+% ============================================================
+% XeTeX + IEEEtran v1.8b fix: define pdflatex primitives that IEEEtran needs
+% at class-load time. Must appear BEFORE \documentclass.
+\ifx\pdfoutput\undefined\newcount\pdfoutput\fi
+\pdfoutput=1
+\ifx\pdfpagewidth\undefined\newdimen\pdfpagewidth\fi
+\ifx\pdfpageheight\undefined\newdimen\pdfpageheight\fi
+\pdfpagewidth=8.5in
+\pdfpageheight=11in
+
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% Map Times Roman (ptm) for XeTeX — required so IEEEtran's \maketitle
+% font-size commands don't produce spurious tokens.
+\usepackage{fontspec}
+\setmainfont[
+  BoldFont       = {Times New Roman Bold},
+  ItalicFont     = {Times New Roman Italic},
+  BoldItalicFont = {Times New Roman Bold Italic}
+]{Times New Roman}
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{url}
+
+\newcommand{\rhal}{RobustHFT-AgentLab}
+\newcommand{\misgen}{MisGen}
+
+% ============================================================
+\begin{document}
+
+\title{\rhal{}: A Defensive Simulation Framework for\\
+Stress-Testing LLM-Based Trading Agents Under\\
+Subtle Financial Misinformation}
+
+\author{%
+  \IEEEauthorblockN{Aryaman Agarwal}
+  \IEEEauthorblockA{
+    \textit{Department of Computer Science and Engineering}\\
+    \textit{[Institute Name]}\\
+    [City, Country]\\
+    [email@institute.edu]}
+  \and
+  \IEEEauthorblockN{[Supervisor Name]}
+  \IEEEauthorblockA{
+    \textit{Department of Computer Science and Engineering}\\
+    \textit{[Institute Name]}\\
+    [City, Country]\\
+    [email@institute.edu]}
+}
+
+\maketitle
+
+% ============================================================
+\begin{abstract}
+Large-language-model (LLM) trading agents fuse numerical market data
+with unstructured text signals, making them vulnerable to subtle financial
+misinformation: small edits to sentiment polarity, numeric magnitudes,
+causal relationships or entity names that remain semantically close to
+genuine news yet alter the agent's trading decision.
+AutoRedTrader \cite{liu2026autoredtrader} formalised this threat as a
+constrained, closed-loop red-teaming loop and demonstrated attack success
+rates (ASR) of up to 26.7\% on real BTC data.
+We present \rhal{}, an offline, deterministic, CPU-only framework that
+reproduces the AutoRedTrader red-teaming setting without paid APIs and
+extends it along four axes:
+(i)~\emph{microstructure-augmented temporal grounding}, adding six
+HFT-inspired proxies (range-based spread, Garman--Klass realised
+variance, order-flow imbalance, volume shock, Amihud illiquidity,
+range ratio) to the historical-analog evidence signal;
+(ii)~an \emph{explicit risk-control layer} comprising a confidence gate,
+a hold-on-conflict rule, volatility-targeted position sizing, stop-loss/
+take-profit triggers, and a drawdown throttle;
+(iii)~\emph{structural no-lookahead guarantees}, including a strict analog
+admissibility rule ($e{+}H{\le}t$) verified by future-mutation unit tests;
+and (iv)~a \emph{placebo-controlled attack metric} in which meaning-preserving
+paraphrases quantify the retrieval-noise floor, yielding a
+\emph{net ASR} that isolates semantic manipulation from pool-reshuffling
+artefacts.
+Across five seeds of fully synthetic market data,
+the undefended agent achieves ASR\,${=}$\,31.7\% under attack
+but the placebo arm already flips 13.5\% of decisions,
+giving a net ASR of only 18.2\%.
+Temporal grounding with microstructure evidence reduces naive ASR by
+${\approx}$9 percentage points; the risk layer further cuts
+attack-period maximum drawdown by 4 percentage points at a
+quantified cost in clean cumulative return.
+All code, data generators, experiments and tests are deterministic and
+fully reproducible from a single integer seed.
+\end{abstract}
+
+\begin{IEEEkeywords}
+LLM trading agents, financial misinformation, adversarial NLP, red teaming,
+temporal grounding, market microstructure, risk management, backtesting
+\end{IEEEkeywords}
+
+% ============================================================
+\section{Introduction}
+
+The adoption of large language models (LLMs) in quantitative finance has
+accelerated rapidly.
+Agents such as FinMem \cite{yu2025finmem}, FinCon \cite{yu2024fincon},
+TradingAgents \cite{xiao2025tradingagents} and FinAgent \cite{zhang2024finagent}
+retrieve news from a retrieval-augmented generation (RAG) memory store,
+reason over it jointly with price observations, and emit sequential
+Buy/Sell/Hold decisions.
+This architecture exposes a novel attack surface: an adversary who can insert
+subtly modified news articles into the agent's retrieval pool can alter its
+decisions without triggering obvious safety filters or jailbreak detectors,
+because the perturbed text remains topically and syntactically plausible.
+
+TradeTrap \cite{yan2025tradetrap} showed empirically that small textual
+perturbations shift LLM-based trading decisions substantially.
+AutoRedTrader \cite{liu2026autoredtrader} formalised this threat as an
+autonomous red-teaming loop, \misgen{}, that (a) decomposes the attack
+space into behavioural bias manipulation, minor semantic perturbations
+(eight sub-types), and style rewriting, (b) uses similarity and
+detectability filters to keep generated text plausible and stealthy, and
+(c) adapts the operator mixture online with a P\'olya-urn sampler driven
+by the agent's own decision changes.
+Their reported ASR of ${\approx}26.7\%$ on a real BTC/news dataset
+validates the practical threat.
+
+Three gaps motivate \rhal{}.
+\emph{Reproducibility}: the original evaluation requires paid LLM calls,
+a live news feed and FAISS; a researcher cannot replicate it on a laptop.
+\emph{Incomplete evidence}: the grounding signal in AutoRedTrader uses six
+daily price indicators; market microstructure offers faster-moving evidence
+about whether a textual claim is consistent with what traders are actually
+doing in real time.
+\emph{Metric validity}: ASR compares an injected run with a clean run, but
+adding \emph{any} documents to a RAG pool reshuffles top-$k$ results and
+flips near-threshold decisions even without semantic manipulation.
+Without a paraphrase control, ASR conflates attack meaning with retrieval noise.
+
+\textbf{Contributions.}
+\begin{enumerate}
+  \item A compact, fully tested offline reimplementation of the
+        AutoRedTrader loop that runs in mock mode without APIs and
+        optionally with any OpenAI-compatible or Anthropic model.
+  \item Six microstructure proxies integrated as grounding evidence,
+        individually ablated to show their marginal value.
+  \item An explicit post-policy risk layer with five configurable controls,
+        all individually ablated.
+  \item Structural no-lookahead guarantees (trailing normalisation,
+        next-open execution, $e{+}H{\le}t$ analog admissibility)
+        verified by future-mutation tests.
+  \item A placebo arm and net ASR metric that separate semantic attack
+        effect from retrieval-noise artefacts.
+  \item A robustness--return frontier parameterised by grounding strength
+        $\kappa$, quantifying the cost of defence in clean return.
+\end{enumerate}
+
+% ============================================================
+\section{Related Work}
+
+\textbf{LLM trading agents.}
+FinMem \cite{yu2025finmem} introduced layered memory and character design
+for sequential trading.
+InvestorBench \cite{li2025investorbench} standardised the
+Perception/Profile/Memory/Action (PPMA) agent interface used in this work.
+FinCon \cite{yu2024fincon} and TradingAgents \cite{xiao2025tradingagents}
+extend to multi-agent and tool-augmented reasoning.
+None treat adversarial text as part of their core evaluation.
+
+\textbf{Adversarial robustness of financial agents.}
+TradeTrap \cite{yan2025tradetrap} demonstrated that modest textual shifts
+substantially change LLM trading decisions.
+AutoRedTrader \cite{liu2026autoredtrader} is the first autonomous red-teaming
+loop specialised to this setting and serves as our base.
+
+\textbf{Adversarial NLP and red teaming.}
+AutoRedTeamer \cite{zhou2025autoredteamer} and ArtPrompt \cite{jiang2024artprompt}
+target general LLM safety via iterative prompt optimisation.
+LIFE \cite{wang2026life} focuses on detecting LLM-generated fake news using
+prompt-induced linguistic fingerprints.
+GLISTERS \cite{jiang2026glisters} introduced reference-free counterfactual
+financial misinformation detection, motivating the need for harder attacks.
+
+\textbf{Behavioural finance.}
+The five bias types we implement---overconfidence \cite{barber2001boys},
+loss aversion \cite{kahneman2013prospect}, herding \cite{spyrou2013herding},
+anchoring, and confirmation---are grounded in empirical finance literature.
+Our lexicon scorer follows the spirit of Loughran--McDonald
+\cite{loughran2011liability}.
+
+\textbf{Market microstructure and backtest validity.}
+We adopt the range-based spread proxy of Corwin \& Schultz
+\cite{corwin2012spread}, the Garman--Klass (GK) variance estimator
+\cite{garman1980estimation}, the Amihud illiquidity ratio
+\cite{amihud2002illiquidity}, and the OFI formulation of Cont et al.\
+\cite{cont2014price}.
+Lookahead prevention follows L\'opez de Prado \cite{lopezdeprado2018advances}.
+
+% ============================================================
+\section{Methodology}
+
+\subsection{Problem Setting}
+
+Let $\mathcal{N}$ be a daily news corpus for a single asset and
+$\text{FinAgent}$ a POMDP agent that at each day $t$ retrieves
+$\mathcal{N}_t^{\text{ret}} \subset \mathcal{N}$ and chooses
+$a_t \in \{\text{Buy}, \text{Sell}, \text{Hold}\}$.
+An attacker controls \misgen{}, which maps clean items $n \in \mathcal{N}$
+to synthetic variants $\tilde{n}$, constrained by:
+\begin{equation}
+  \mathcal{A}_{\text{sim}}(\tilde{n}, n) \ge \tau_{\text{sim}}, \quad
+  \mathcal{A}_{\text{det}}(\tilde{n}) \le \tau_{\text{det}},
+  \label{eq:constraints}
+\end{equation}
+where $\mathcal{A}_{\text{sim}}$ is TF-IDF cosine similarity and
+$\mathcal{A}_{\text{det}}$ is a trained detectability classifier.
+The attacker maximises expected decision change (ASR).
+The defender modifies the agent to reduce ASR without discarding
+genuinely useful textual evidence.
+
+\subsection{Misinformation Generation (\misgen{})}\label{sec:misgen}
+
+\misgen{} decomposes the attack into three operator sub-spaces.
+
+\textbf{Behavioural bias ($\Phi_{\text{Bias}}$).}
+One of five biases is injected into the agent's system-prompt context per day
+with probability $p$: overconfidence (action threshold scaled by $0.55$),
+loss aversion (negative signals up-weighted by $1.7$), anchoring
+(0.5 blend with previous signal), herding (pull toward recent majority action),
+and confirmation (up-weight agreeing documents).
+
+\textbf{Minor semantic perturbations ($\Phi_{\text{Minor}}$).}
+Eight sub-types operate on news item text:
+\emph{flipping} (antonym substitution over directional words and causal
+connectors), \emph{sentiment shift} (intensify or dampen polarity),
+\emph{numerical} (scale percentages to $[1.5\times, 2\times]$ or
+$<0.5\times$ preserving sign), \emph{temporal} (advance or retard
+quarter/year references), \emph{entity} (swap company to competitor,
+subsidiary or parent), \emph{concept} (interchange revenue/net income,
+profit/loss), \emph{causal} (swap causes across polarity pools), and
+\emph{other} (vague attribution phrases).
+
+\textbf{Style rewriting ($\Phi_{\text{Rewrite}}$).}
+Two rewrite styles---\emph{news} (removes attribution markers and
+intensifiers, merges sentences) and \emph{academic} (formal synonyms,
+intensifiers converted to hedges)---launder surface features without
+altering directional words, numbers, entities or causes.
+Rewriting is a fallback when a minor-perturbed candidate fails the
+detectability filter.
+
+\textbf{Placebo operator (ours).}
+Synonym and discourse-connector substitution only, with no change to
+sentiment polarity, direction words, numbers, entities or causes.
+Used as a meaning-preserving control to establish the retrieval-noise floor.
+
+\textbf{Filtering.}
+$\mathcal{A}_{\text{sim}}$ uses TF-IDF (1--2-gram) cosine similarity with
+IDF fitted once on the clean corpus.
+$\mathcal{A}_{\text{det}}$ is a logistic regression over 18 interpretable
+cues (polarity densities, mixed polarity, intensifier/hedge rates, numeric
+magnitudes, cause--outcome mismatch, sentence structure, vague attribution,
+entity count) trained on clean vs.\ \emph{minor-perturbed} text only, so
+$\Phi_{\text{Rewrite}}$ can reduce detectability below $\tau_{\text{det}}$.
+Threshold $\tau_{\text{det}}$ is calibrated to a 10\% false-positive rate
+on held-out clean text.
+
+\textbf{Adaptive feedback (P\'olya urn).}
+Strategy weights follow \cite{liu2026autoredtrader} Eqs.~(16)--(18):
+$w_s = 1 + \alpha h_s$, $P(s) = w_s / \sum w$, with a return-dependent
+boost $\delta$ toward overconfidence when CR\,$>\!1$ and toward loss
+aversion when CR\,$<\!1$.
+After each day, if the treated agent's action differs from the shadow agent's,
+the active bias and the strategies of every retrieved synthetic document are
+reinforced (Eq.~(7) of \cite{liu2026autoredtrader}).
+Algorithm~\ref{alg:misgen} summarises the full generation loop.
+
+\begin{algorithm}[t]
+\caption{\misgen{} generation for one trading day $t$}
+\label{alg:misgen}
+\begin{algorithmic}[1]
+\Require clean items $\{n_i\}$, history $h$, budget $K$, CR
+\State $b \leftarrow$ SampleBias$(h, \text{CR})$ with prob.\ $p$
+\State Inject BiasConfig $b$ into treated agent Profile
+\For{each $n_i$}
+  \State Sample minor type $m \sim P(s|h)$
+  \State $\tilde{n} \leftarrow \Phi_m(n_i)$
+  \If{Eq.~\eqref{eq:constraints} holds}
+    \State Accept $\tilde{n}$; \textbf{continue}
+  \ElsIf{$\mathcal{A}_{\text{sim}} \ge \tau_{\text{sim}}$}
+    \State Sample rewrite $r$; $\tilde{n} \leftarrow \Phi_r(\tilde{n})$
+    \If{$\mathcal{A}_{\text{det}}(\tilde{n}) \le \tau_{\text{det}}$}
+      \State Accept $\tilde{n}$; \textbf{continue}
+    \EndIf
+  \EndIf
+  \State Retry up to $K$ times; discard if all fail
+\EndFor
+\State Add accepted items to treated pool (\texttt{provenance="synthetic"})
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Temporal Grounding with Microstructure Evidence}
+\label{sec:grounding}
+
+\textbf{Core features} (after \cite{liu2026autoredtrader} Eq.~(19)):
+1-day log return; 5-day realised volatility $\sigma_5$; 20-day drawdown;
+short/long trend divergence; trailing-residual anomaly $z$-score
+(an online-safe substitute for STL \cite{lopezdeprado2018advances});
+and 5/20-day momentum.
+
+\textbf{Microstructure proxies (our extension):}
+\begin{align}
+  \mathrm{spread}   &= (H_t - L_t) / C_t \\
+  \mathrm{GK\text{-}RV} &= \tfrac{1}{2}[\ln(H_t/L_t)]^2
+                    - (2\ln 2{-}1)[\ln(C_t/O_t)]^2 \\
+  \mathrm{OFI}      &= (C_t - O_t) / (H_t - L_t + \epsilon) \\
+  \mathrm{vol\text{-}shock} &= \ln(V_t / \bar{V}_{20}) \\
+  \mathrm{illiq}    &= |r_t| / (C_t \cdot V_t) \times 10^9 \\
+  \mathrm{range\text{-}ratio} &= (H_t{-}L_t) / \overline{(H{-}L)}_{20}
+\end{align}
+where $O, H, L, C, V$ are daily OHLCV.
+GK-RV \cite{garman1980estimation} and spread \cite{corwin2012spread}
+are trailed over 5-day windows; illiquidity follows Amihud
+\cite{amihud2002illiquidity}; OFI follows \cite{cont2014price}.
+
+All features are $z$-scored with a trailing 60-day window.
+A bounded market evidence signal uses fixed, documented weights
+(no fitting, hence no leakage):
+\begin{equation}
+  s_{\mathrm{mkt}} = \tanh(\mathbf{w}^{\top} \mathbf{z}_t),
+\end{equation}
+with $w_{\mathrm{mom}_5}{=}0.35$, $w_{\mathrm{div}}{=}0.35$,
+$w_{\mathrm{OFI}}{=}0.30$, $w_{\mathrm{spread}}{=}{-}0.10$,
+$w_{\mathrm{GK\text{-}RV}}{=}{-}0.10$, and smaller weights elsewhere.
+
+\textbf{Historical analogs.}
+The top-$k$ cosine neighbours of the flattened 30-day $z$-score window
+at $t$ are retrieved from windows ending at index $e$, subject to
+$e + H \le t$ (strict admissibility: the $H$-day forward outcome must be
+fully observed before use).
+Their mean forward return is blended into $s_{\mathrm{mkt}}$ via a
+$\tanh$-arctanh blend with weight 0.3.
+
+\textbf{Consistency and grounding.}
+Text--market consistency is:
+\begin{equation}
+  c = 1 - |s_{\mathrm{text}} - s_{\mathrm{mkt}}| / 2 \;\in [0,1].
+\end{equation}
+Grounding shrinks inconsistent text toward market evidence with
+strength $\kappa \in [0,1]$:
+\begin{equation}
+  s_g = s - \kappa (1 - c)(s - s_{\mathrm{mkt}}),
+  \label{eq:grounding}
+\end{equation}
+leaving consistent text ($c \approx 1$) unchanged.
+
+\subsection{Risk-Control Layer}\label{sec:risk}
+
+The risk layer runs \emph{after} the policy and can only reduce or exit
+positions; it never initiates a trade.
+Five sequential controls are applied:
+\begin{enumerate}
+  \item \textbf{Stop-loss/take-profit}: exit any open long if unrealised
+        P\&L $\le -6\%$ or $\ge 12\%$.
+  \item \textbf{Confidence gate}: override to Hold if confidence $< 0.40$.
+  \item \textbf{Hold-on-conflict}: override to Hold if $c < 0.6$.
+  \item \textbf{Vol-targeted sizing}: target position
+        $= \min(1, \sigma^* / \sigma_5)$, $\sigma^* = 0.20$ (annualised).
+  \item \textbf{Drawdown throttle}: halve size if portfolio drawdown $> 10\%$.
+\end{enumerate}
+Every override is logged for attribution in evaluation.
+
+\subsection{Metrics}
+
+MER and ASR follow Eqs.~(8)--(9) of \cite{liu2026autoredtrader}.
+We add: \textbf{MER lift} $= \mathrm{MER}/\bar{\rho}$ (retrieval above
+chance); \textbf{net ASR} $= \mathrm{ASR}_{\mathrm{inj}} -
+\mathrm{ASR}_{\mathrm{placebo}}$, computed per seed;
+and \textbf{active-flip ASR} (flips where the treated agent actively
+trades rather than holding defensively).
+We also report signal deviation, cumulative return (CR), maximum drawdown,
+turnover and risk-override counts.
+
+% ============================================================
+\section{Experimental Setup}
+
+\textbf{Data.}
+We generate 500 business days of OHLCV from a 3-regime Markov drift with
+GARCH(1,1) volatility \cite{bollerslev1986garch} and 3 template news items
+per day with latent sentiment correlated ($\rho{=}0.35$) with the next-day
+return (news is genuinely but noisily informative).
+The last 60 days form the evaluation window; the preceding 440 days serve
+as warm-up and analog library.
+Real OHLCV can be loaded from CSV or \texttt{yfinance}.
+
+\textbf{Arms.}
+Three defence levels---\emph{none}, \emph{grounded}
+($\kappa{=}0.7$, microstructure on), \emph{grounded+risk}---each run
+three arms: \emph{clean}, \emph{placebo}, \emph{injected}; 5 seeds each.
+\misgen{} parameters: $p{=}0.7$, $\alpha{=}1.0$, $\delta{=}0.15$,
+$K{=}3$, $\tau_{\mathrm{sim}}{=}0.35$, injection ratio 1:1; TF-IDF
+top-4 retrieval with 3-day recency decay.
+
+\textbf{Ablations.}
+Attack-side: remove filtering, feedback, bias, minor perturbations, or
+rewriting individually.
+Defence-side: none; grounding only (no micro); grounding + micro;
+risk only; full; full without hold-on-conflict.
+Retrieval breadth $k \in \{2, 4, 8\}$; grounding strength $\kappa \in
+\{0.3, 0.7, 1.0\}$.
+
+\textbf{Compute.}
+Single-process on a laptop CPU. 45 paired runs over 5 seeds complete in
+${\approx}$60\,s; 61 unit tests in ${\approx}$40\,s.
+
+% ============================================================
+\section{Results}
+
+\begin{table}[t]
+\centering
+\caption{Main results: mean $\pm$ std over 5 seeds, 60-day evaluation.
+MER, ASR, net ASR in \%. CR is paired clean-arm cumulative return;
+MaxDD is attack-period maximum drawdown (\%).}
+\label{tab:main}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}llrrrrrr@{}}
+\toprule
+\textbf{Defence} & \textbf{Arm} & \textbf{MER} & \textbf{ASR} &
+  \textbf{Net} & \textbf{CR} & \textbf{MaxDD} \\
+\midrule
+\multirow{3}{*}{None}
+  & Clean    & --   & 0.0 & -- & +14.6 & $-$5.4 \\
+  & Placebo  & 48.2 & $13.5_{\pm2.1}$ & -- & +15.3 & $-$5.9 \\
+  & Injected & 67.2 & $31.7_{\pm3.8}$ & \textbf{18.2} & +15.3 & $-$5.9 \\
+\midrule
+\multirow{3}{*}{Grounded}
+  & Clean    & --   & 0.0 & -- & +12.1 & $-$4.7 \\
+  & Placebo  & 49.0 & $12.8_{\pm1.9}$ & -- & +12.9 & $-$5.2 \\
+  & Injected & 67.5 & $22.4_{\pm3.1}$ & \textbf{9.6} & +12.9 & $-$5.2 \\
+\midrule
+\multirow{3}{*}{Grnd.+Risk}
+  & Clean    & --   & 0.0 & -- & +10.8 & $-$3.6 \\
+  & Placebo  & 48.8 & $14.1_{\pm2.3}$ & -- & +11.4 & $-$3.9 \\
+  & Injected & 67.1 & $24.3_{\pm2.7}$ & \textbf{10.2} & +11.4 & $-$3.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Attack effectiveness.}
+Against the undefended agent the injected arm achieves
+MER\,${=}$\,67.2\% (lift $1.38\times$: rewritten documents acquire ticker
+mentions, making them more retrievable than chance) and
+ASR\,${=}$\,31.7$\pm$3.8\%---consistent with the ${\approx}$26.7\%
+reported in \cite{liu2026autoredtrader}.
+Signal deviation (0.19) is substantially higher than for the placebo
+arm (0.04), confirming that misinformation moves the internal signal.
+
+\textbf{The placebo control.}
+The placebo arm flips 13.5\% of decisions despite zero directional
+manipulation.
+Inspection shows two causes: adding $\approx\!3$ documents doubles the
+pool, displacing existing documents from the top-4 set; and $\approx\!27\%$
+of clean signals lie within 0.05 of the action threshold, making them
+intrinsically jittery.
+Net ASR of 18.2\% is therefore the semantic effect of misinformation;
+naive ASR overstates it by $1.75\times$.
+
+\textbf{Defences.}
+Table~\ref{tab:main} summarises results.
+Grounding with microstructure evidence reduces naive ASR from 31.7\% to
+22.4\% ($-9.3$\,pp; net ASR 9.6\%).
+Adding the risk layer raises naive ASR slightly to 24.3\% because
+\texttt{hold\_on\_conflict} fires whenever injected text conflicts with
+market evidence and a defensive Hold is scored as a decision change by
+Eq.~(9) of \cite{liu2026autoredtrader}.
+Active-flip ASR falls from 8.3\% (no defence) to 5.1\% (full defence).
+Attack-period maximum drawdown falls from 5.9\% to 3.9\%, which is the
+risk layer's primary contribution.
+Clean CR falls from 14.6\% to 10.8\% under the full defence because the
+synthetic news is genuinely informative and grounding discounts it when
+it disagrees with lagging price evidence.
+
+% ============================================================
+\section{Ablation Study}
+
+\begin{table}[t]
+\centering
+\caption{Attack-side ablations against the undefended agent (5 seeds).
+$\Delta$\,Net is the change in net ASR vs.\ Full \misgen{}.}
+\label{tab:abl_attack}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Variant} & \textbf{MER} & \textbf{ASR} & \textbf{Net ASR} & \textbf{$\Delta$ Net} \\
+\midrule
+Full \misgen{}         & 67.2 & 31.7 & 18.2 & -- \\
+w/o Minor perturbation & 52.1 & 23.8 &  3.6 & $-$14.6 \\
+w/o Rewrite            & 44.9 & 36.1 & 22.8 & $+$4.6 \\
+w/o Filtering          & 71.3 & 31.2 & 17.9 & $-$0.3 \\
+w/o Feedback           & 67.0 & 30.4 & 16.7 & $-$1.5 \\
+w/o Bias injection     & 66.9 & 29.8 & 16.3 & $-$1.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Defence-side ablations against the injected arm (5 seeds).
+Active-flip ASR excludes defensive Holds.}
+\label{tab:abl_defense}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Variant} & \textbf{ASR} & \textbf{Net} & \textbf{Active} & \textbf{MaxDD} \\
+\midrule
+No defence                & 31.7 & 18.2 & 8.3 & 5.9 \\
+Grounding only (no micro) & 29.8 & 17.1 & 7.9 & 5.7 \\
+Grounding + micro         & 22.4 &  9.6 & 6.1 & 5.2 \\
+Risk only (no grounding)  & 34.2 & 20.9 & 5.8 & 4.1 \\
+Full (grounded + risk)    & 24.3 & 10.2 & 5.1 & 3.9 \\
+Full w/o hold-on-conflict & 23.1 &  9.8 & 5.3 & 4.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Attack components (Table~\ref{tab:abl_attack}).}
+Removing minor perturbation collapses net ASR to 3.6\%, confirming that
+\emph{semantic content} drives the attack.
+Removing rewriting raises net ASR to 22.8\% while lowering MER:
+without laundering, only candidates that pass the detector directly are
+accepted, dominated by the decision-potent types (flipping, sentiment,
+numerical); rewriting admits more detectable but decision-weak types
+(entity, concept, causal) and replaces intensifiers with hedges, diluting
+the lexicon signal.
+Style rewriting therefore trades decision impact for retrievability and
+stealth---a divergence from \cite{liu2026autoredtrader} where LLM rewrites
+better preserve persuasive force.
+Removing filtering, feedback, or bias changes ASR by less than 1.9\,pp
+($<$1\,std): the P\'olya-urn reinforcement receives mostly noise on a
+surrogate agent with a jittery action threshold, making uniform sampling
+competitive.
+
+\textbf{Defence components (Table~\ref{tab:abl_defense}).}
+Price-only grounding barely helps ($-$1.9\,pp naive ASR vs.\ no defence),
+because the core price features provide a coarse market state estimate.
+Adding the six microstructure proxies drives the gain to $-$9.3\,pp naive
+ASR ($-$8.6\,pp net), because OFI and spread give a sharper instantaneous
+view of trading activity against which inconsistent text is more reliably
+discounted.
+The risk layer alone raises naive ASR through defensive Holds but cuts
+active-flip ASR from 8.3\% to 5.8\% and MaxDD from 5.9\% to 4.1\%.
+Disabling hold-on-conflict changes ASR by $<$1\,pp; the risk layer's main
+contribution is to drawdown control rather than decision robustness.
+
+\textbf{Retrieval breadth.}
+Net ASR is flat for $k \in \{2,4,8\}$ (range: 17.1\%--19.4\%), confirming
+the net metric is not an artefact of a particular $k$.
+
+% ============================================================
+\section{Safety and Ethics}
+
+\rhal{} generates synthetic financial misinformation solely to measure and
+improve defensive agent robustness.
+Every generated record carries a mandatory \texttt{provenance="synthetic"}
+label and non-empty safety string.
+Generated text is confined to in-process memory and git-ignored output
+directories; no code routes orders to a broker or disseminates content
+publicly.
+The attacker maximises decision change, not profit; no code steers prices.
+Synthetic entities are fictitious.
+We follow the dual-use discussion of \cite{liu2026autoredtrader} and
+release the code to support defensive research.
+
+% ============================================================
+\section{Limitations}
+
+(1)~The default agent is a transparent surrogate; the harness supports
+real LLM mode but headline numbers are surrogate-based.
+(2)~Data and news are synthetic; template news is more regular than real
+reporting.
+(3)~The detectability proxy (${\approx}$66\% accuracy) is a feature
+classifier, not an LLM judge.
+(4)~Stop-loss/take-profit checks are at daily closes, not intraday.
+(5)~Sixty evaluation days per seed make CR noisy; we report paired
+differences and seed variance but not formal hypothesis tests.
+(6)~A threshold-based action policy is intrinsically jittery;
+smoother policies (hysteresis, probabilistic sizing) would reduce
+both naive and placebo ASR.
+
+% ============================================================
+\section{Conclusion}
+
+We presented \rhal{}, an offline, deterministic laboratory for
+stress-testing LLM-based trading agents under subtle financial
+misinformation.
+Four main findings emerge:
+(1)~the undefended agent is measurably vulnerable to semantic misinformation
+(net ASR 18.2\%);
+(2)~roughly half of naive ASR is attributable to retrieval-pool reshuffling
+rather than misinformation semantics, making a placebo control essential;
+(3)~microstructure evidence is the key component that makes temporal
+grounding effective---price-only grounding adds little;
+(4)~the risk layer protects drawdown and active-flip rates but its defensive
+Holds inflate naive ASR, revealing a scoring artefact in the standard
+ASR formula.
+With rule-based operators, semantic minor perturbations drive the attack
+while style rewriting weakens it, a divergence from the LLM-driven
+original that the framework makes straightforward to verify with a real model.
+
+Future work will run the same harness with real LLM policies and real price
+series, introduce smoother action policies to reduce the placebo noise floor,
+and study profit-seeking attackers under the same safety boundary.
+
+% ============================================================
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

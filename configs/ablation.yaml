@@ -1,0 +1,26 @@
+# Ablation matrix: each entry is a name plus a dict of dotted overrides on default.yaml.
+# Attack-side ablations (paper Table 2) measure attack effectiveness against the vulnerable agent.
+# Defense-side ablations (our extension) measure robustness gain of each defensive component.
+ablations:
+  attack:
+    full:            {}
+    wo_filtering:    {misgen.use_filter: false}
+    wo_feedback:     {misgen.use_feedback: false}
+    wo_bias:         {misgen.use_bias: false}
+    wo_minor:        {misgen.use_minor: false}
+    wo_rewrite:      {misgen.use_rewrite: false}
+  defense:
+    none:            {grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+    grounding_only:  {grounding.enabled: true,  risk.enabled: false, features.micro.enabled: false}
+    grounding_micro: {grounding.enabled: true,  risk.enabled: false, features.micro.enabled: true}
+    risk_only:       {grounding.enabled: false, risk.enabled: true,  features.micro.enabled: false}
+    full_defense:    {grounding.enabled: true,  risk.enabled: true,  features.micro.enabled: true}
+    wo_hold_on_conflict: {grounding.enabled: true, risk.enabled: true, features.micro.enabled: true, risk.hold_on_conflict: false}
+  retrieval:                 # sensitivity of naive vs net ASR to retrieval breadth
+    k2:  {retrieval.top_k: 2}
+    k4:  {retrieval.top_k: 4}
+    k8:  {retrieval.top_k: 8}
+  grounding_strength:        # kappa sweep: robustness-return trade-off
+    kappa_0.3: {grounding.strength: 0.3}
+    kappa_0.7: {grounding.strength: 0.7}
+    kappa_1.0: {grounding.strength: 1.0}

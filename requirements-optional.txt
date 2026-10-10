@@ -1,0 +1,7 @@
+# Optional extras -- NOT required for mock/offline mode.
+# Install selectively:  pip install -r requirements-optional.txt
+anthropic>=0.30          # API LLM mode (provider=anthropic)
+openai>=1.30             # API LLM mode (provider=openai-compatible)
+yfinance>=0.2.40         # optional public historical data downloader
+# sentence-transformers>=2.7   # optional dense retrieval (large download; TF-IDF is default)
+# statsmodels>=0.14            # optional STL decomposition (fallback: rolling-mean residual)
