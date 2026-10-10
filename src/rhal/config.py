@@ -111,6 +111,7 @@ class BacktestCfg(BaseModel):
 
 class ExperimentCfg(BaseModel):
     n_seeds: int = 30
+    counterfactual_asr: bool = True  # also compute the one-step counterfactual ASR (+1 agent step/day; doubles LLM calls in llm mode)
     arms: list[str] = Field(default_factory=lambda: ["clean", "injected", "injected_grounded", "injected_grounded_risk", "placebo"])
 
 

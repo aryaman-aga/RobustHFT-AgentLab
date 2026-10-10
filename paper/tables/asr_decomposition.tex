@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{ASR (\%) of the controls built from the frozen attack tape, mean over seeds. Each column adds one ingredient of the attack: paraphrases of every item (classic placebo), paraphrases of only the attacked items, plus the attack's bias contexts, and finally the misinformation itself. Meaning $=$ frozen $-$ (count-matched $+$ bias), with its 95\% bootstrap CI.}
+\label{tab:decomposition}
+\small
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lrrrrr}
+\toprule
+Defence & Placebo & Matched & $+$Bias & Attack & Meaning \\
+\midrule
+none & 21.7 & 21.8 & 25.6 & 38.3 & +12.8 [+10.7, +14.9] \\
+grounded & 14.6 & 14.7 & 17.4 & 23.4 & +6.0 [+4.0, +8.0] \\
+grounded\_risk & 17.4 & 17.3 & 20.1 & 27.1 & +7.0 [+4.6, +9.6] \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}

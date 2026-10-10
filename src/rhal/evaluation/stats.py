@@ -76,16 +76,19 @@ def holm(pvals) -> np.ndarray:
     return out
 
 
-def paired_diffs(runs: pd.DataFrame, metric: str, arm_a: str, arm_b: str) -> pd.Series:
-    """Per-seed ``metric(arm_a) - metric(arm_b)``; seeds missing either arm are dropped."""
+def paired_diffs(runs: pd.DataFrame, metric: str, arm_a: str, arm_b: str, metric_b: str | None = None) -> pd.Series:
+    """Per-seed ``metric(arm_a) - metric_b(arm_b)`` (metric_b defaults to metric); seeds missing either side are dropped."""
     a = runs.loc[runs["arm"] == arm_a].set_index("seed")[metric]
-    b = runs.loc[runs["arm"] == arm_b].set_index("seed")[metric]
+    b = runs.loc[runs["arm"] == arm_b].set_index("seed")[metric_b or metric]
     return (a - b).dropna()
 
 
 @dataclass(frozen=True)
 class Comparison:
-    """One paired test: mean over seeds of metric(arm_a) - metric(arm_b)."""
+    """One paired test: mean over seeds of metric(arm_a) - metric_b(arm_b).
+
+    metric_b defaults to metric; set it to compare two metrics of the same arm (e.g. ASR - ASR_cf).
+    """
 
     key: str  # short id, used for LaTeX macro names
     family: str  # Holm correction is applied within a family
@@ -93,19 +96,20 @@ class Comparison:
     metric: str
     arm_a: str
     arm_b: str
+    metric_b: str | None = None
 
 
 def compare(runs: pd.DataFrame, comparisons: list[Comparison], level: float = 0.95, seed: int = 0) -> pd.DataFrame:
     """Evaluate comparisons on per-seed run rows; comparisons whose arms are absent are skipped."""
     out = []
     for c in comparisons:
-        if c.metric not in runs.columns:
+        if c.metric not in runs.columns or (c.metric_b or c.metric) not in runs.columns:
             continue
-        d = paired_diffs(runs, c.metric, c.arm_a, c.arm_b)
+        d = paired_diffs(runs, c.metric, c.arm_a, c.arm_b, c.metric_b)
         if d.empty:
             continue
         lo, hi = bootstrap_ci(d.to_numpy(), level=level, seed=seed)
-        out.append({"key": c.key, "family": c.family, "label": c.label, "metric": c.metric, "arm_a": c.arm_a, "arm_b": c.arm_b,
+        out.append({"key": c.key, "family": c.family, "label": c.label, "metric": c.metric, "metric_b": c.metric_b or c.metric, "arm_a": c.arm_a, "arm_b": c.arm_b,
                     "n": len(d), "mean_diff": float(d.mean()), "ci_lo": lo, "ci_hi": hi, "p": sign_flip_pvalue(d.to_numpy(), seed=seed)})
     df = pd.DataFrame(out)
     if df.empty:

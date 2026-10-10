@@ -53,3 +53,11 @@ def test_compare_end_to_end():
     assert st.loc["net", "significant"] and not st.loc["null", "significant"]
     assert st.loc["null", "mean_diff"] == 0.0 and st.loc["null", "p"] == 1.0
     assert (st["p_holm"] >= st["p"]).all() and st.loc["net", "n"] == 20
+
+
+def test_paired_diffs_with_second_metric():
+    runs = pd.DataFrame({"arm": ["a", "a"], "seed": [1, 2], "ASR": [0.5, 0.4], "ASR_cf": [0.3, 0.4]})
+    d = paired_diffs(runs, "ASR", "a", "a", metric_b="ASR_cf")  # within-arm ASR - ASR_cf
+    assert np.allclose(d.to_numpy(), [0.2, 0.0])
+    st = compare(runs, [Comparison("gap", "f", "ASR - cf", "ASR", "a", "a", metric_b="ASR_cf")])
+    assert np.isclose(st.loc[0, "mean_diff"], 0.1) and st.loc[0, "metric_b"] == "ASR_cf"

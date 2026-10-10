@@ -13,7 +13,7 @@ import pandas as pd  # noqa: E402
 from ..utils.io import ensure_dir, save_csv  # noqa: E402
 from .stats import bootstrap_ci  # noqa: E402
 
-KEY_COLS = ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_given_exposed", "exposure_rate", "signal_deviation", "CR", "CR_clean_paired", "max_drawdown", "sharpe", "turnover", "hold_rate"]
+KEY_COLS = ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "ASR_given_exposed", "exposure_rate", "signal_deviation", "CR", "CR_clean_paired", "max_drawdown", "sharpe", "turnover", "hold_rate"]
 
 
 def aggregate(rows: list[dict], by: str = "arm") -> pd.DataFrame:
@@ -41,7 +41,7 @@ def _ci_err(agg: pd.DataFrame, metric: str, scale: float) -> np.ndarray | pd.Ser
     return agg[f"{metric}_std"] * scale
 
 
-def to_markdown(agg: pd.DataFrame, cols: list[str] | None = None, pct: tuple[str, ...] = ("MER", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_given_exposed", "exposure_rate", "CR", "CR_clean_paired", "max_drawdown", "hold_rate")) -> str:
+def to_markdown(agg: pd.DataFrame, cols: list[str] | None = None, pct: tuple[str, ...] = ("MER", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "ASR_given_exposed", "exposure_rate", "CR", "CR_clean_paired", "max_drawdown", "hold_rate")) -> str:
     cols = cols or [c for c in KEY_COLS if f"{c}_mean" in agg.columns]
     hdr = "| arm | " + " | ".join(cols) + " |"
     sep = "|---|" + "---|" * len(cols)

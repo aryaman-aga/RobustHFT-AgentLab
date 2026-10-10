@@ -4,6 +4,8 @@
 Per seed it also records the adaptive attack against the undefended agent
 (injected__none) and replays it against every defence level (frozen__<level>), so
 defences can be compared on bit-identical attacks as well as under an adaptive one.
+The same tape drives the matched placebo controls (placebo_matched__<level>,
+placebo_bias__<level>) that split ASR into pool noise, count, bias and meaning.
 
 Outputs (under <output_dir>/pipeline/):
   pipeline_runs.csv, pipeline_summary.csv, pipeline_summary.md,
@@ -19,7 +21,8 @@ from pathlib import Path
 from _common import base_parser, parse_overrides
 
 from rhal.config import load_config
-from rhal.evaluation.experiment import TAPE_SOURCE_ARM, Simulation, attach_net_asr, frozen_arms, prepare_dataset, standard_arms, train_detector
+from rhal.evaluation.experiment import (TAPE_INJECTIONS, TAPE_SOURCE_ARM, Simulation, attach_net_asr, frozen_arms, matched_placebo_arms,
+                                       prepare_dataset, standard_arms, train_detector)
 from rhal.evaluation.report import plot_bars, plot_equity, plot_exposure_by_type, plot_frontier, to_markdown, write_tables
 from rhal.misgen import DetectabilityModel
 from rhal.utils.io import ensure_dir, save_json
@@ -49,8 +52,9 @@ def main() -> None:
         det.save(det_path)
         log.info(f"trained detector -> {det_path} (acc={det.meta['train_acc']:.3f}, thr={det.threshold:.3f})")
 
-    # standard arms first: the frozen arms replay the tape recorded by TAPE_SOURCE_ARM
-    arms = standard_arms(micro_default=not a.no_micro) + frozen_arms(micro_default=not a.no_micro)
+    # standard arms first: the tape-driven arms replay the tape recorded by TAPE_SOURCE_ARM
+    micro = not a.no_micro
+    arms = standard_arms(micro_default=micro) + frozen_arms(micro_default=micro) + matched_placebo_arms(micro_default=micro)
     rows: list[dict] = []
     seed0_steps: dict[str, list[dict]] = {}
     attack_metrics: list[dict] = []  # adaptive-arm metrics for the exposure-by-type figure
@@ -61,7 +65,7 @@ def main() -> None:
         sim = Simulation(cfg, ds, det, seed)
         by_name = {}
         for spec in arms:
-            r = sim.run(spec, tape=by_name[TAPE_SOURCE_ARM].tape if spec.injection == "replay" else None)
+            r = sim.run(spec, tape=by_name[TAPE_SOURCE_ARM].tape if spec.injection in TAPE_INJECTIONS else None)
             by_name[spec.name] = r
             if spec.injection == "misgen":
                 attack_metrics.append(r.metrics)

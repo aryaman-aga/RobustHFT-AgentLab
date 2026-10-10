@@ -28,7 +28,7 @@ python scripts/train_detector.py                # outputs/models/detector.pkl  (
 python -m pytest tests/ -q                      # full test suite, ~40 s
 
 # 3. experiments
-python scripts/run_pipeline.py                  # 12 arms x 30 seeds (~4 min) -> outputs/pipeline/
+python scripts/run_pipeline.py                  # 18 arms x 30 seeds (~7 min) -> outputs/pipeline/
 python scripts/run_ablation.py --group all      # attack / defense / retrieval / kappa -> outputs/ablation/
 python scripts/make_report_tables.py            # outputs/report.md + paper/tables/*.tex
 
@@ -99,12 +99,18 @@ Secrets go in `.env` (git-ignored); `.env.example` lists the variables.
 | `placebo__*` | clean + meaning-preserving paraphrases | unbiased | per level |
 | `injected__*` | clean + MisGen misinformation, **adaptive** (feedback loop runs against this agent) | attacker bias prompt | per level |
 | `frozen__*` | clean + the attack recorded against the undefended agent, **replayed verbatim** | recorded bias prompts | per level |
+| `placebo_matched__*` | clean + paraphrases of only the items the recorded attack injected (same count) | unbiased | per level |
+| `placebo_bias__*` | as `placebo_matched__*` | recorded bias prompts | per level |
 
 Defence levels: `none` (text-heavy ungrounded agent), `grounded` (temporal grounding + micro features), `grounded_risk` (+ risk layer). Each arm is a paired run: the treated agent's ASR is measured against a shadow clean agent that saw the same market on the same day.
 
 **Common random numbers.** MisGen is seeded by (seed, injection type) — never by arm name — and draws from streams keyed by (day, item), so every arm of a seed shares the attacker's random numbers and renaming an arm cannot change a result. The `frozen__*` arms go further: every defence faces bit-identical documents, so their differences are caused by the defence alone (`frozen__none` reproduces `injected__none` exactly; the pipeline checks this on every seed).
 
 **Statistics.** 30 seeds by default (`experiment.n_seeds`). Claims are tested as paired per-seed differences: mean, 95% percentile-bootstrap CI, two-sided sign-flip permutation p-value, Holm correction within each family (`src/rhal/evaluation/stats.py`; comparisons are listed in `scripts/make_report_tables.py`). Results land in `*_stats.csv`, `outputs/report.md` and `paper/tables/stats_*.tex`.
+
+**Matched controls.** The classic placebo paraphrases *every* item and carries no bias prompt, whereas the attack injects only accepted candidates and adds bias prompts. The matched placebos, built from the same tape, split ASR into pool noise, count, bias and meaning: meaning = ASR(`frozen`) − ASR(`placebo_bias`) (`ASR_net_matched`). Every placebo variant uses the same paraphrase for each (day, item).
+
+**One-step counterfactual ASR** (`ASR_cf`, `experiment.counterfactual_asr`). Once the treated agent's portfolio and memory drift from the shadow's, later "flips" can come from that drift rather than from the text. Each day a throw-away agent decides with the shadow's memory and portfolio but the treated pool and bias, and is compared with the shadow. It reads only copies, so it changes no other result (tested).
 
 **Metrics.** MER and ASR follow the paper (Eqs. 8–9). We add **MER lift** (MER ÷ synthetic share of the visible pool) and **net ASR** (ASR − placebo ASR), because a doubled retrieval pool alone reshuffles top-k and flips near-threshold decisions; net ASR isolates the effect of *meaning*. Also: signal deviation, ASR|exposed, exposure and flips by perturbation type and by bias, CR, max drawdown, Sharpe-like, turnover, risk-override counts.
 
