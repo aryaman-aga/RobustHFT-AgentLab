@@ -11,3 +11,7 @@
 Build: `make paper` from the repo root (uses `tectonic` if installed, else `pdflatex` + `bibtex`). PDFs are build products and are git-ignored.
 
 Refresh numbers after new experiments: `make pipeline ablation report`, then `make paper`.
+
+## Status (30-seed re-run, Oct 2026)
+
+Numbers in `main.tex` regenerate automatically, but some *prose* claims were written against the old 5-seed results and fail the paired tests in `tables/stats_main.tex` / `tables/stats_ablation.tex`. Each is marked with a `% TODO(30-seed)` comment in `main.tex` (abstract, Results, Ablation, Conclusion). In short: the placebo/net-ASR finding and the grounding gain hold strongly; the microstructure, risk-layer-drawdown, style-rewrite and κ-frontier claims do not. Cite `\val{Cmp<Key>}` / `Lo` / `Hi` / `P` macros when rewriting.

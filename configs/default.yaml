@@ -84,7 +84,7 @@ backtest:
   execution: next_open         # decisions at close t execute at open t+1 (no lookahead)
 
 experiment:
-  n_seeds: 5
+  n_seeds: 30                  # paired seeds; CIs and permutation tests need >=20 (5 was too few)
   arms:                        # standard comparison arms
     - clean
     - injected
