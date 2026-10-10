@@ -100,7 +100,7 @@ def test_engine_placebo_and_no_filter(synth, detector):
 def test_engine_feedback_reinforces(synth, detector):
     texts = synth["news"]["text"].tolist()
     eng = _engine(detector, texts, bias_prob=1.0)
-    eng.sample_bias(cr=1.1)
+    eng.sample_bias(cr=1.1, date="2024-01-02")
     items = [NewsItem(id="n0", date="2024-01-02", text=texts[0])]
     syn = eng.generate_for_items(items, "2024-01-02")
     before = dict(eng.s_minor.counts)

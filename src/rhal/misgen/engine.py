@@ -10,6 +10,15 @@ Per trading day the engine:
 After the agent acts, ``update_history`` reinforces the strategies of the
 synthetic docs that were retrieved on a day where the injected decision
 differed from the paired clean decision (paper Eq. 7).
+
+Randomness uses *keyed* streams: the day's bias draw uses rng(seed, "bias", date)
+and each item's perturbation uses rng(seed, "item", date, item_id), instead of one
+sequential generator. Two engines with the same seed therefore draw the same
+uniforms for the same (day, item) no matter what happened earlier in their runs.
+This gives common random numbers across defence arms: with feedback off they inject
+identical documents, and with feedback on they differ only where the learned
+strategy probabilities differ. A single sequential stream would desynchronise after
+the first differing accept/reject and turn every later draw into fresh noise.
 """
 from __future__ import annotations
 
@@ -65,7 +74,7 @@ class MisGenEngine:
         injection_ratio: float = 1.0,
         placebo: bool = False,
     ):
-        self.g = rng(seed, "misgen")
+        self.seed = seed  # all draws come from rng(seed, <purpose>, date[, item_id]); see module docstring
         self.bias_prob = bias_prob
         self.use_bias = use_bias
         self.use_minor = use_minor
@@ -84,12 +93,13 @@ class MisGenEngine:
         self._today_bias: str | None = None
 
     # ---------------------------------------------------------------------
-    def sample_bias(self, cr: float) -> BiasConfig:
+    def sample_bias(self, cr: float, date: str) -> BiasConfig:
         """Day-level bias for the agent context (Phi_Bias)."""
-        if self.placebo or not self.use_bias or self.g.random() >= self.bias_prob:
+        g = rng(self.seed, "bias", date)
+        if self.placebo or not self.use_bias or g.random() >= self.bias_prob:
             self._today_bias = None
             return BiasConfig()
-        self._today_bias = self.s_bias.sample(self.g, cr=cr, delta=self.delta)
+        self._today_bias = self.s_bias.sample(g, cr=cr, delta=self.delta)
         return bias_config(self._today_bias)
 
     def generate_for_items(self, items: list[NewsItem], date: str) -> list[NewsItem]:
@@ -98,21 +108,25 @@ class MisGenEngine:
         n_target = int(round(self.injection_ratio * len(items)))
         if n_target <= 0:
             return out
-        chosen = items if n_target >= len(items) else [items[i] for i in self.g.choice(len(items), n_target, replace=False)]
+        if n_target >= len(items):
+            chosen = items
+        else:
+            chosen = [items[i] for i in rng(self.seed, "select", date).choice(len(items), n_target, replace=False)]
         for k, item in enumerate(chosen):
+            g = rng(self.seed, "item", date, item.id)  # this item's own stream, shared by all arms
             if self.placebo:
-                text = apply_placebo(item.text, self.g)
+                text = apply_placebo(item.text, g)
                 out.append(self._mk(item, text, date, k, {"bias": None, "minor": "placebo", "rewrite": None}, "placebo"))
                 continue
             accepted = None
             for _ in range(self.max_tries):
                 self.stats.generated += 1
                 if self.use_minor:
-                    m = self.s_minor.sample(self.g)
-                    cand = apply_minor(item.text, m, self.g)
+                    m = self.s_minor.sample(g)
+                    cand = apply_minor(item.text, m, g)
                 else:
                     m = "none"
-                    cand = apply_placebo(item.text, self.g)  # w/o Minor: general rewriting only
+                    cand = apply_placebo(item.text, g)  # w/o Minor: general rewriting only
                 s, d, ok_s, ok_d = self.filter.evaluate(item.text, cand)
                 self.stats.sim_scores.append(s)
                 self.stats.det_scores.append(d)
@@ -121,8 +135,8 @@ class MisGenEngine:
                     accepted = (cand, strat)
                     break
                 if self.use_rewrite and ok_s:
-                    r = self.s_rewrite.sample(self.g)
-                    cand2 = apply_rewrite(cand, r, self.g)
+                    r = self.s_rewrite.sample(g)
+                    cand2 = apply_rewrite(cand, r, g)
                     s2, d2, ok_s2, ok_d2 = self.filter.evaluate(item.text, cand2)
                     self.stats.det_scores.append(d2)
                     if ok_d2 and ok_s2:

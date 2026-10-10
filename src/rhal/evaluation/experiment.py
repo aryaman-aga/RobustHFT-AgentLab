@@ -6,6 +6,16 @@ Each run drives TWO agents in lockstep over the same market path:
 They differ ONLY in what text they read. ASR is the per-step action disagreement;
 the MisGen feedback loop (paper Eq. 7) is closed from the same pair.
 With ``injection='none'`` the two agents are identical (a determinism check).
+
+Two attack settings are compared across defences:
+  * adaptive (``injection='misgen'``) -- MisGen runs live and its feedback loop
+    adapts to the defended agent. It is seeded by (seed, injection type), never by
+    arm name, so all adaptive arms of a seed draw the same random numbers (common
+    random numbers) and arm labels cannot change results.
+  * frozen (``injection='replay'``) -- an AttackTape recorded from one adaptive run
+    (by default against the undefended agent) is replayed verbatim, so every defence
+    faces bit-identical documents and bias contexts. Differences between frozen arms
+    are caused by the defence alone (a transfer attack, as in adversarial-ML practice).
 """
 from __future__ import annotations
 
@@ -25,12 +35,16 @@ from ..features.windows import feature_columns
 from ..grounding import EvidenceBuilder
 from ..llm import build_client
 from ..memory import NewsPool, Retriever
-from ..misgen import DetectabilityModel, MisGenEngine
+from ..misgen import DetectabilityModel, MisGenEngine, bias_config
 from ..misgen.engine import build_detector_training_set
+from ..schemas import NewsItem
 from ..seeding import child_seed
 from .metrics import compute_metrics
 
-Injection = Literal["none", "misgen", "placebo"]
+Injection = Literal["none", "misgen", "placebo", "replay"]
+
+# Arm whose adaptive attack is recorded and replayed against every defence (frozen setting).
+TAPE_SOURCE_ARM = "injected__none"
 
 
 @dataclass
@@ -44,6 +58,15 @@ class RunSpec:
 
 
 @dataclass
+class AttackTape:
+    """What the attacker did in one adaptive run, day by day, so it can be replayed exactly."""
+
+    source: str  # arm the tape was recorded from
+    docs: dict[str, list[NewsItem]] = field(default_factory=dict)  # date -> injected items
+    bias: dict[str, str | None] = field(default_factory=dict)  # date -> bias name (None = no bias)
+
+
+@dataclass
 class RunResult:
     spec: RunSpec
     seed: int
@@ -51,6 +74,7 @@ class RunResult:
     treated_steps: list[dict]
     shadow_steps: list[dict]
     misgen_summary: dict | None
+    tape: AttackTape | None = None  # recorded for adaptive (injection='misgen') runs
 
     def to_row(self) -> dict:
         row = {"arm": self.spec.name, "seed": self.seed, "injection": self.spec.injection, "grounded": self.spec.grounded, "risk": self.spec.risk, "micro": self.spec.micro}
@@ -130,18 +154,22 @@ class Simulation:
                             grounded=spec.grounded, kappa=cfg.grounding.strength, text_weight=cfg.agent.text_weight, adaptive_trust=cfg.agent.adaptive_trust)
 
     def _misgen(self, cfg: Config, spec: RunSpec) -> MisGenEngine | None:
-        if spec.injection == "none":
+        if spec.injection in ("none", "replay"):
             return None
         m = cfg.misgen
         return MisGenEngine(
-            seed=child_seed(self.seed, "misgen", spec.name), background_corpus=self.ds.news["text"].tolist(), detector=self.det,
+            # keyed by injection type, NOT spec.name: renaming an arm must never change its results
+            seed=child_seed(self.seed, "misgen", spec.injection), background_corpus=self.ds.news["text"].tolist(), detector=self.det,
             bias_prob=m.bias_prob, use_bias=m.use_bias, use_minor=m.use_minor, use_rewrite=m.use_rewrite, use_filter=m.use_filter,
             use_feedback=m.use_feedback, alpha=m.alpha, delta=m.delta, max_tries=m.max_tries, tau_sim=m.sim_threshold, tau_det=m.det_threshold,
             injection_ratio=m.injection_ratio, placebo=(spec.injection == "placebo"),
         )
 
     # -- main loop ---------------------------------------------------------
-    def run(self, spec: RunSpec) -> RunResult:
+    def run(self, spec: RunSpec, tape: AttackTape | None = None) -> RunResult:
+        """Run one paired arm. ``tape`` is required for, and only allowed with, injection='replay'."""
+        if (spec.injection == "replay") != (tape is not None):
+            raise ValueError(f"arm {spec.name!r}: pass a tape exactly when injection='replay'")
         cfg = self.cfg.with_overrides(spec.overrides) if spec.overrides else self.cfg
         bt = Backtester(fee_bps=cfg.backtest.fee_bps, slippage_bps=cfg.backtest.slippage_bps)
         shadow_pool = NewsPool.from_frame(self.ds.news)
@@ -150,6 +178,7 @@ class Simulation:
         s_state = PortfolioState(cash=cfg.backtest.initial_cash)
         t_state = PortfolioState(cash=cfg.backtest.initial_cash)
         misgen = self._misgen(cfg, spec)
+        recorded = AttackTape(source=spec.name) if spec.injection == "misgen" else None
         close = self.ds.prices["close"].to_numpy(dtype=float)
         open_ = self.ds.prices["open"].to_numpy(dtype=float)
         s_steps: list[dict] = []
@@ -159,11 +188,18 @@ class Simulation:
             bias_name = None
             if misgen is not None:
                 cr = t_state.equity / cfg.backtest.initial_cash if t_state.last_price > 0 else 1.0
-                bias = misgen.sample_bias(cr)
+                bias = misgen.sample_bias(cr, date)
                 bias_name = bias.name
                 treated.set_bias(bias)
                 today_clean = [it for it in shadow_pool.items() if it.date == date]
-                treated_pool.extend(misgen.generate_for_items(today_clean, date))
+                injected = misgen.generate_for_items(today_clean, date)
+                treated_pool.extend(injected)
+                if recorded is not None:
+                    recorded.docs[date], recorded.bias[date] = injected, bias_name
+            elif tape is not None:  # frozen attack: replay exactly what the source run injected
+                bias_name = tape.bias.get(date)
+                treated.set_bias(bias_config(bias_name))
+                treated_pool.extend(tape.docs.get(date, []))
             for st in (s_state, t_state):
                 bt.mark(st, close[t])
             eq_s0, eq_t0 = s_state.equity, t_state.equity
@@ -185,7 +221,7 @@ class Simulation:
                 retrieved_syn = [treated_pool.get(i) for i, p in zip(d_t.retrieved_ids, d_t.retrieved_provenance) if p != "clean"]
                 misgen.update_history(d_t.action != d_s.action, retrieved_syn)
         metrics = compute_metrics(t_steps, s_steps, cfg.backtest.initial_cash)
-        return RunResult(spec, self.seed, metrics, t_steps, s_steps, misgen.summary() if misgen else None)
+        return RunResult(spec, self.seed, metrics, t_steps, s_steps, misgen.summary() if misgen else None, recorded)
 
     @staticmethod
     def _rec(d, f, state: PortfolioState, eq0: float, exec_px: float, vis_syn: float, bias: str | None, strategies: list) -> dict:
@@ -202,22 +238,40 @@ class Simulation:
 # ---------------------------------------------------------------------------
 # standard arms
 # ---------------------------------------------------------------------------
+def defence_levels(micro_default: bool = True) -> list[tuple[str, bool, bool, bool]]:
+    """(name, grounded, risk, micro) for the three defence levels of the main experiment."""
+    return [("none", False, False, False), ("grounded", True, False, micro_default), ("grounded_risk", True, True, micro_default)]
+
+
 def standard_arms(micro_default: bool = True) -> list[RunSpec]:
     """Three defence levels x three injection modes (clean / misgen / placebo)."""
     arms: list[RunSpec] = []
-    for dname, grounded, risk, micro in [("none", False, False, False), ("grounded", True, False, micro_default), ("grounded_risk", True, True, micro_default)]:
+    for dname, grounded, risk, micro in defence_levels(micro_default):
         for inj in ("none", "misgen", "placebo"):
             label = {"none": "clean", "misgen": "injected", "placebo": "placebo"}[inj]
             arms.append(RunSpec(name=f"{label}__{dname}", injection=inj, grounded=grounded, risk=risk, micro=micro))
     return arms
 
 
+def frozen_arms(micro_default: bool = True) -> list[RunSpec]:
+    """Each defence level against the tape recorded from TAPE_SOURCE_ARM (frozen attack).
+
+    frozen__none replays the tape against the agent it was recorded from, so it must
+    reproduce injected__none exactly; run_pipeline checks this on every seed.
+    """
+    return [RunSpec(name=f"frozen__{d}", injection="replay", grounded=g, risk=r, micro=m) for d, g, r, m in defence_levels(micro_default)]
+
+
+TREATED_PREFIXES = ("injected__", "frozen__")  # arms whose placebo partner is placebo__<suffix>
+
+
 def attach_net_asr(rows: list[dict]) -> list[dict]:
-    """Add ASR_net = ASR(injected) - ASR(placebo) per (seed, defence) onto injected rows."""
+    """Add ASR_net = ASR(treated) - ASR(placebo) per (seed, defence) onto injected and frozen rows."""
     by = {(r["seed"], r["arm"]): r for r in rows}
     for r in rows:
-        if r["arm"].startswith("injected__"):
-            plc = by.get((r["seed"], r["arm"].replace("injected__", "placebo__")))
+        prefix = next((p for p in TREATED_PREFIXES if r["arm"].startswith(p)), None)
+        if prefix is not None:
+            plc = by.get((r["seed"], "placebo__" + r["arm"][len(prefix):]))
             r["ASR_net"] = r["ASR"] - plc["ASR"] if plc else float("nan")
             r["signal_deviation_net"] = r["signal_deviation"] - plc["signal_deviation"] if plc else float("nan")
             r["ASR_active_net"] = r["ASR_active"] - plc["ASR_active"] if plc else float("nan")

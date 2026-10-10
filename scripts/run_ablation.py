@@ -5,6 +5,9 @@ Groups (configs/ablation.yaml):
   attack   -- paper Table 2 style: remove one MisGen component; vulnerable (undefended) agent.
   defense  -- our extension: which defensive component buys robustness, at what return cost.
   retrieval / grounding_strength -- sensitivity sweeps.
+The defense and grounding_strength groups evaluate every variant twice: against an
+adaptive attacker (injected__*) and against the frozen attack recorded from the
+undefended agent of the same seed (frozen__*), which is identical for all variants.
 Outputs under <output_dir>/ablation/<group>/.
 """
 from __future__ import annotations
@@ -15,7 +18,7 @@ from pathlib import Path
 from _common import ROOT, base_parser, parse_overrides
 
 from rhal.config import load_config
-from rhal.evaluation.experiment import RunSpec, Simulation, attach_net_asr, prepare_dataset, train_detector
+from rhal.evaluation.experiment import TAPE_SOURCE_ARM, RunSpec, Simulation, attach_net_asr, prepare_dataset, train_detector
 from rhal.evaluation.report import plot_bars, to_markdown, write_tables
 from rhal.misgen import DetectabilityModel
 from rhal.utils.io import ensure_dir, load_yaml
@@ -34,7 +37,8 @@ def specs_for(group: str, name: str, ov: dict, cfg) -> list[RunSpec]:
     if group in ("defense", "grounding_strength"):
         if group == "grounding_strength":
             g, r, m = True, True, True
-        return [RunSpec(f"injected__{name}", "misgen", g, r, m, ov), RunSpec(f"placebo__{name}", "placebo", g, r, m, ov), RunSpec(f"clean__{name}", "none", g, r, m, ov)]
+        return [RunSpec(f"injected__{name}", "misgen", g, r, m, ov), RunSpec(f"frozen__{name}", "replay", g, r, m, ov),
+                RunSpec(f"placebo__{name}", "placebo", g, r, m, ov), RunSpec(f"clean__{name}", "none", g, r, m, ov)]
     if group == "retrieval":
         return [RunSpec(f"injected__{name}", "misgen", False, False, False, ov), RunSpec(f"placebo__{name}", "placebo", False, False, False, ov)]
     raise ValueError(group)
@@ -56,6 +60,7 @@ def main() -> None:
     if not det_path.exists():
         det.save(det_path)
     datasets = {}
+    tapes = {}  # seed -> attack recorded against the undefended base agent (shared by all groups)
     for group in groups:
         out = ensure_dir(Path(cfg.output_dir) / "ablation" / group)
         rows: list[dict] = []
@@ -67,7 +72,12 @@ def main() -> None:
             sim = Simulation(cfg, datasets[seed], det, seed)
             for name, ov in abl[group].items():
                 for spec in specs_for(group, name, dict(ov or {}), cfg):
-                    r = sim.run(spec)
+                    tape = None
+                    if spec.injection == "replay":
+                        if seed not in tapes:  # same run as the pipeline's injected__none for this seed
+                            tapes[seed] = sim.run(RunSpec(TAPE_SOURCE_ARM, "misgen")).tape
+                        tape = tapes[seed]
+                    r = sim.run(spec, tape=tape)
                     rows.append(r.to_row())
                     m = r.metrics
                     log.info(f"[{group}] seed={seed} {spec.name:28s} MER={m['MER']:.3f} ASR={m['ASR']:.3f} CR={m['CR']:+.3f}")
