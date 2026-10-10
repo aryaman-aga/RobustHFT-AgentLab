@@ -14,4 +14,6 @@ Refresh numbers after new experiments: `make pipeline ablation report`, then `ma
 
 ## Status (30-seed re-run, Oct 2026)
 
-Numbers in `main.tex` regenerate automatically, but some *prose* claims were written against the old 5-seed results and fail the paired tests in `tables/stats_main.tex` / `tables/stats_ablation.tex`. Each is marked with a `% TODO(30-seed)` comment in `main.tex` (abstract, Results, Ablation, Conclusion). In short: the placebo/net-ASR finding and the grounding gain hold strongly; the microstructure, risk-layer-drawdown, style-rewrite and κ-frontier claims do not. Cite `\val{Cmp<Key>}` / `Lo` / `Hi` / `P` macros when rewriting.
+The prose of `main.tex` has been rewritten against the paired tests in `tables/stats_main.tex` / `tables/stats_ablation.tex`. The placebo/net-ASR finding and the grounding gain hold in both attack settings. The microstructure, risk-layer (net ASR, active flips, drawdown), style-rewrite and κ effects show no detectable difference and are reported as such.
+
+Paired comparisons are cited with three helpers defined in the preamble of `main.tex`, all of which expand to the generated `\val{Cmp<Key>}` / `Lo` / `Hi` / `P` macros: `\cmp{CmpKey}` → "8.8 pp [6.1, 11.6]", `\ci{CmpKey}` → "[6.1, 11.6]", `\pholm{CmpKey}` → "p_Holm = 0.041" or "p_Holm < 0.001". A difference is called detectable only if its CI excludes zero **and** p_Holm < 0.05.
