@@ -111,7 +111,7 @@ class BacktestCfg(BaseModel):
 
 class ExperimentCfg(BaseModel):
     n_seeds: int = 100
-    counterfactual_asr: bool = True  # also compute the one-step counterfactual ASR (+1 agent step/day; doubles LLM calls in llm mode)
+    counterfactual_asr: bool = True  # also compute the one-step counterfactual ASR (+1 agent step/day: 3 LLM calls/day instead of 2 in llm mode)
 
 
 class LLMCfg(BaseModel):
