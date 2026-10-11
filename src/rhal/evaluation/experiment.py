@@ -16,9 +16,24 @@ Two attack settings are compared across defences:
     (by default against the undefended agent) is replayed verbatim, so every defence
     faces bit-identical documents and bias contexts. Differences between frozen arms
     are caused by the defence alone (a transfer attack, as in adversarial-ML practice).
+
+Matched placebo controls (built from the same tape, so exact for the frozen setting):
+  * placebo         -- paraphrase EVERY clean item, no bias (classic noise floor);
+  * placebo_matched -- paraphrase only the items the attack actually injected (same count);
+  * placebo_bias    -- placebo_matched plus the attack's daily bias contexts.
+All placebo variants share one paraphrase stream per (day, item), so a matched pool
+is a subset of the classic placebo pool. This splits ASR into pool noise, count,
+bias and meaning: meaning = ASR(frozen) - ASR(placebo_bias).
+
+One-step counterfactual ASR (experiment.counterfactual_asr): after the first flip the
+treated agent's portfolio and memory drift from the shadow's, so later flips can come
+from that drift rather than from the text. Each day a third, throw-away agent decides
+with the SHADOW's memory and portfolio but the treated pool and bias; ASR_cf compares
+its action with the shadow's. It only reads copies, so it cannot change any other result.
 """
 from __future__ import annotations
 
+import copy
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
@@ -41,10 +56,12 @@ from ..schemas import NewsItem
 from ..seeding import child_seed
 from .metrics import compute_metrics
 
-Injection = Literal["none", "misgen", "placebo", "replay"]
+Injection = Literal["none", "misgen", "placebo", "replay", "placebo_matched", "placebo_bias"]
 
 # Arm whose adaptive attack is recorded and replayed against every defence (frozen setting).
 TAPE_SOURCE_ARM = "injected__none"
+# Injection types that are driven by a recorded AttackTape instead of a live attacker.
+TAPE_INJECTIONS = ("replay", "placebo_matched", "placebo_bias")
 
 
 @dataclass
@@ -157,24 +174,29 @@ class Simulation:
         if spec.injection in ("none", "replay"):
             return None
         m = cfg.misgen
+        matched = spec.injection in ("placebo_matched", "placebo_bias")
+        # keyed by injection type, NOT spec.name: renaming an arm must never change its results.
+        # Every placebo variant uses the "placebo" key, so the same (day, item) gets the same paraphrase.
+        key = "misgen" if spec.injection == "misgen" else "placebo"
         return MisGenEngine(
-            # keyed by injection type, NOT spec.name: renaming an arm must never change its results
-            seed=child_seed(self.seed, "misgen", spec.injection), background_corpus=self.ds.news["text"].tolist(), detector=self.det,
+            seed=child_seed(self.seed, "misgen", key), background_corpus=self.ds.news["text"].tolist(), detector=self.det,
             bias_prob=m.bias_prob, use_bias=m.use_bias, use_minor=m.use_minor, use_rewrite=m.use_rewrite, use_filter=m.use_filter,
             use_feedback=m.use_feedback, alpha=m.alpha, delta=m.delta, max_tries=m.max_tries, tau_sim=m.sim_threshold, tau_det=m.det_threshold,
-            injection_ratio=m.injection_ratio, placebo=(spec.injection == "placebo"),
+            injection_ratio=1.0 if matched else m.injection_ratio,  # matched: paraphrase exactly the tape's items
+            placebo=(spec.injection != "misgen"),
         )
 
     # -- main loop ---------------------------------------------------------
     def run(self, spec: RunSpec, tape: AttackTape | None = None) -> RunResult:
-        """Run one paired arm. ``tape`` is required for, and only allowed with, injection='replay'."""
-        if (spec.injection == "replay") != (tape is not None):
-            raise ValueError(f"arm {spec.name!r}: pass a tape exactly when injection='replay'")
+        """Run one paired arm. ``tape`` is required for, and only allowed with, the TAPE_INJECTIONS."""
+        if (spec.injection in TAPE_INJECTIONS) != (tape is not None):
+            raise ValueError(f"arm {spec.name!r}: pass a tape exactly when injection is one of {TAPE_INJECTIONS}")
         cfg = self.cfg.with_overrides(spec.overrides) if spec.overrides else self.cfg
         bt = Backtester(fee_bps=cfg.backtest.fee_bps, slippage_bps=cfg.backtest.slippage_bps)
         shadow_pool = NewsPool.from_frame(self.ds.news)
         treated_pool = NewsPool.from_frame(self.ds.news)
         shadow, treated = self._agent(cfg, spec), self._agent(cfg, spec)
+        counterfactual = self._agent(cfg, spec) if cfg.experiment.counterfactual_asr else None
         s_state = PortfolioState(cash=cfg.backtest.initial_cash)
         t_state = PortfolioState(cash=cfg.backtest.initial_cash)
         misgen = self._misgen(cfg, spec)
@@ -186,7 +208,7 @@ class Simulation:
         for t in range(self.t0, self.t1):
             date = self.ds.dates[t]
             bias_name = None
-            if misgen is not None:
+            if spec.injection in ("misgen", "placebo"):  # live MisGen: adaptive attack or classic placebo
                 cr = t_state.equity / cfg.backtest.initial_cash if t_state.last_price > 0 else 1.0
                 bias = misgen.sample_bias(cr, date)
                 bias_name = bias.name
@@ -196,15 +218,25 @@ class Simulation:
                 treated_pool.extend(injected)
                 if recorded is not None:
                     recorded.docs[date], recorded.bias[date] = injected, bias_name
-            elif tape is not None:  # frozen attack: replay exactly what the source run injected
+            elif spec.injection == "replay":  # frozen attack: replay exactly what the source run injected
                 bias_name = tape.bias.get(date)
                 treated.set_bias(bias_config(bias_name))
                 treated_pool.extend(tape.docs.get(date, []))
+            elif spec.injection in ("placebo_matched", "placebo_bias"):  # paraphrase only the items the tape attacked
+                parents = list(dict.fromkeys(doc.parent_id for doc in tape.docs.get(date, [])))  # unique, in tape order
+                treated_pool.extend(misgen.generate_for_items([shadow_pool.get(i) for i in parents], date))
+                bias_name = tape.bias.get(date) if spec.injection == "placebo_bias" else None
+                treated.set_bias(bias_config(bias_name))
             for st in (s_state, t_state):
                 bt.mark(st, close[t])
             eq_s0, eq_t0 = s_state.equity, t_state.equity
+            if counterfactual is not None:  # snapshot the shadow BEFORE it records today's step
+                counterfactual.memory = copy.deepcopy(shadow.memory)
+                counterfactual.set_bias(treated.profile.bias)
+                cf_state = copy.deepcopy(s_state)
             d_s = shadow.step(t, shadow_pool, s_state)
             d_t = treated.step(t, treated_pool, t_state)
+            d_cf = counterfactual.step(t, treated_pool, cf_state) if counterfactual is not None else None
             exec_px = open_[t + 1] if cfg.backtest.execution == "next_open" else close[t]
             f_s = bt.execute(s_state, d_s.target_position, exec_px)
             f_t = bt.execute(t_state, d_t.target_position, exec_px)
@@ -217,7 +249,8 @@ class Simulation:
             vis_syn = sum(1 for it, _ in vis if it.provenance != "clean") / max(len(vis), 1)
             s_steps.append(self._rec(d_s, f_s, s_state, eq_s0, exec_px, 0.0, None, []))
             t_steps.append(self._rec(d_t, f_t, t_state, eq_t0, exec_px, vis_syn, bias_name, [treated_pool.get(i).strategy for i, p in zip(d_t.retrieved_ids, d_t.retrieved_provenance) if p != "clean"]))
-            if misgen is not None:
+            t_steps[-1]["cf_action"] = d_cf.action.value if d_cf is not None else None
+            if spec.injection == "misgen":  # only the adaptive attacker learns from feedback
                 retrieved_syn = [treated_pool.get(i) for i, p in zip(d_t.retrieved_ids, d_t.retrieved_provenance) if p != "clean"]
                 misgen.update_history(d_t.action != d_s.action, retrieved_syn)
         metrics = compute_metrics(t_steps, s_steps, cfg.backtest.initial_cash)
@@ -262,21 +295,34 @@ def frozen_arms(micro_default: bool = True) -> list[RunSpec]:
     return [RunSpec(name=f"frozen__{d}", injection="replay", grounded=g, risk=r, micro=m) for d, g, r, m in defence_levels(micro_default)]
 
 
-TREATED_PREFIXES = ("injected__", "frozen__")  # arms whose placebo partner is placebo__<suffix>
+def matched_placebo_arms(micro_default: bool = True) -> list[RunSpec]:
+    """Count-matched placebo, with and without the attack's bias, per defence level (tape of TAPE_SOURCE_ARM)."""
+    return [RunSpec(name=f"{inj}__{d}", injection=inj, grounded=g, risk=r, micro=m)
+            for d, g, r, m in defence_levels(micro_default) for inj in ("placebo_matched", "placebo_bias")]
+
+
+TREATED_PREFIXES = ("injected__", "frozen__")  # arms whose placebo partners are placebo*__<suffix>
+
+# derived column -> (metric, partner prefix): column = metric(treated) - metric(partner arm of the same seed)
+NET_COLUMNS = {
+    "ASR_net": ("ASR", "placebo__"),  # classic net ASR (Eq. 9 minus the paraphrase noise floor)
+    "signal_deviation_net": ("signal_deviation", "placebo__"),
+    "ASR_active_net": ("ASR_active", "placebo__"),
+    "ASR_cf_net": ("ASR_cf", "placebo__"),
+    "ASR_net_matched": ("ASR", "placebo_bias__"),  # meaning only: same items, count and bias as the attack
+    "ASR_cf_net_matched": ("ASR_cf", "placebo_bias__"),
+}
 
 
 def attach_net_asr(rows: list[dict]) -> list[dict]:
-    """Add ASR_net = ASR(treated) - ASR(placebo) per (seed, defence) onto injected and frozen rows."""
+    """Add the NET_COLUMNS per (seed, defence) onto injected and frozen rows; NaN elsewhere or if a partner is missing."""
     by = {(r["seed"], r["arm"]): r for r in rows}
     for r in rows:
         prefix = next((p for p in TREATED_PREFIXES if r["arm"].startswith(p)), None)
-        if prefix is not None:
-            plc = by.get((r["seed"], "placebo__" + r["arm"][len(prefix):]))
-            r["ASR_net"] = r["ASR"] - plc["ASR"] if plc else float("nan")
-            r["signal_deviation_net"] = r["signal_deviation"] - plc["signal_deviation"] if plc else float("nan")
-            r["ASR_active_net"] = r["ASR_active"] - plc["ASR_active"] if plc else float("nan")
-        else:
-            r.setdefault("ASR_net", float("nan"))
-            r.setdefault("signal_deviation_net", float("nan"))
-            r.setdefault("ASR_active_net", float("nan"))
+        for col, (metric, partner_prefix) in NET_COLUMNS.items():
+            partner = by.get((r["seed"], partner_prefix + r["arm"][len(prefix):])) if prefix is not None else None
+            if partner is not None and metric in r and metric in partner:
+                r[col] = r[metric] - partner[metric]
+            else:
+                r.setdefault(col, float("nan"))
     return rows

@@ -51,3 +51,16 @@ def test_compute_metrics_paired_delta():
     m = compute_metrics(t, s, 100.0)
     assert math.isclose(m["CR_delta_vs_clean"], 0.03)
     assert m["ASR"] == 0.0
+
+
+def test_counterfactual_asr_by_hand():
+    shadow = [_step(a, ["clean"], 100) for a in ("Buy", "Buy", "Hold", "Sell")]
+    treated = [_step("Buy", ["synthetic"], 100), _step("Sell", ["synthetic"], 100), _step("Hold", ["synthetic"], 100), _step("Buy", ["synthetic"], 100)]
+    for s, cf in zip(treated, ("Buy", "Hold", "Sell", "Buy")):
+        s["cf_action"] = cf
+    m = attack_metrics(treated, shadow)
+    assert math.isclose(m["ASR"], 2 / 4)  # sequential: steps 2 and 4 differ from the shadow
+    assert math.isclose(m["ASR_cf"], 3 / 4)  # counterfactual: steps 2 (Hold), 3 (Sell), 4 (Buy) differ
+    assert math.isclose(m["ASR_cf_active"], 2 / 4)  # the Hold on step 2 is not an active flip
+    del treated[0]["cf_action"]
+    assert "ASR_cf" not in attack_metrics(treated, shadow)  # only reported when every step has it

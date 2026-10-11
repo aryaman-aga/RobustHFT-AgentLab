@@ -18,7 +18,7 @@ from pathlib import Path
 from _common import ROOT, base_parser, parse_overrides
 
 from rhal.config import load_config
-from rhal.evaluation.experiment import TAPE_SOURCE_ARM, RunSpec, Simulation, attach_net_asr, prepare_dataset, train_detector
+from rhal.evaluation.experiment import TAPE_INJECTIONS, TAPE_SOURCE_ARM, RunSpec, Simulation, attach_net_asr, prepare_dataset, train_detector
 from rhal.evaluation.report import plot_bars, to_markdown, write_tables
 from rhal.misgen import DetectabilityModel
 from rhal.utils.io import ensure_dir, load_yaml
@@ -73,7 +73,7 @@ def main() -> None:
             for name, ov in abl[group].items():
                 for spec in specs_for(group, name, dict(ov or {}), cfg):
                     tape = None
-                    if spec.injection == "replay":
+                    if spec.injection in TAPE_INJECTIONS:
                         if seed not in tapes:  # same run as the pipeline's injected__none for this seed
                             tapes[seed] = sim.run(RunSpec(TAPE_SOURCE_ARM, "misgen")).tape
                         tape = tapes[seed]

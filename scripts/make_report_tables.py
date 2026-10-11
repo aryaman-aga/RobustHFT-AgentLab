@@ -20,7 +20,7 @@ from rhal.config import load_config
 from rhal.evaluation.stats import Comparison, compare
 from rhal.utils.io import ensure_dir, save_csv
 
-PCT = {"MER", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_given_exposed", "exposure_rate", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"}
+PCT = {"MER", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "ASR_given_exposed", "exposure_rate", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"}
 PAPER_FIGURES = ["fig_frontier.png", "fig_equity.png", "fig_exposure.png"]
 # Generated tables shrink to the available width only when they would overflow it (needs \\usepackage{adjustbox}).
 FIT_BEGIN, FIT_END = "\\begin{adjustbox}{max width=\\linewidth}", "\\end{adjustbox}"
@@ -56,6 +56,55 @@ def main_comparisons() -> list[Comparison]:
         out.append(C(f"cost_{d}", fam, f"clean CR: none $-$ {d}", "CR", "clean__none", f"clean__{d}"))
     out.append(C("dd_risk", fam, "attacked max DD: grounded_risk $-$ grounded", "max_drawdown", "injected__grounded_risk", "injected__grounded"))
     return out
+
+
+LEVELS = ("none", "grounded", "grounded_risk")
+
+
+def control_comparisons() -> list[Comparison]:
+    """Matched placebo decomposition and one-step counterfactual ASR (separate families, so the
+    Holm-adjusted p-values of main_comparisons() do not change when these are added)."""
+    C, out = Comparison, []
+    fam = "ASR decomposition on the frozen tape"  # placebo -> +count matching -> +bias -> attack
+    for d in LEVELS:
+        out.append(C(f"dec_count_{d}", fam, f"count: placebo_matched $-$ placebo, {d}", "ASR", f"placebo_matched__{d}", f"placebo__{d}"))
+        out.append(C(f"dec_bias_{d}", fam, f"bias: placebo_bias $-$ placebo_matched, {d}", "ASR", f"placebo_bias__{d}", f"placebo_matched__{d}"))
+        out.append(C(f"dec_meaning_{d}", fam, f"meaning: frozen $-$ placebo_bias, {d}", "ASR", f"frozen__{d}", f"placebo_bias__{d}"))
+    fam = "One-step counterfactual ASR (cf-ASR)"
+    for d in LEVELS:  # positive gap = sequential ASR is inflated by the treated agent's drifted state
+        out.append(C(f"cf_gap_{d}", fam, f"ASR $-$ cf-ASR, adaptive, {d}", "ASR", f"injected__{d}", f"injected__{d}", metric_b="ASR_cf"))
+    for d in LEVELS:
+        out.append(C(f"cf_net_{d}", fam, f"net cf-ASR, adaptive, {d}", "ASR_cf", f"injected__{d}", f"placebo__{d}"))
+    for d in LEVELS:  # the cleanest single-day meaning effect: same items, count, bias and state as the clean agent
+        out.append(C(f"cf_meaning_{d}", fam, f"matched net cf-ASR, frozen, {d}", "ASR_cf", f"frozen__{d}", f"placebo_bias__{d}"))
+    fam = "Defence gain on matched net cf-ASR (frozen)"
+    for d in ("grounded", "grounded_risk"):
+        out.append(C(f"cf_gain_{d}", fam, f"matched net cf-ASR: none $-$ {d}", "ASR_cf_net_matched", "frozen__none", f"frozen__{d}"))
+    return out
+
+
+def decomposition_tables(full: pd.DataFrame, st: pd.DataFrame) -> tuple[str, str]:
+    """Markdown + LaTeX: mean ASR of each control per defence level, and the meaning share with its CI."""
+    mean = full.set_index("arm")["ASR_mean"]
+    by_key = st.set_index("key") if not st.empty else pd.DataFrame()
+    md = ["| defence | placebo | count-matched | + bias | frozen attack | meaning (95% CI) |", "|---|---|---|---|---|---|"]
+    tex = ["\\begin{table}[t]", "\\centering",
+           "\\caption{ASR (\\%) of the controls built from the frozen attack tape, mean over seeds. Each column adds one ingredient of the attack: "
+           "paraphrases of every item (classic placebo), paraphrases of only the attacked items, plus the attack's bias contexts, and finally the "
+           "misinformation itself. Meaning $=$ frozen $-$ (count-matched $+$ bias), with its 95\\% bootstrap CI.}",
+           "\\label{tab:decomposition}", "\\small", FIT_BEGIN, "\\begin{tabular}{lrrrrr}", "\\toprule",
+           "Defence & Placebo & Matched & $+$Bias & Attack & Meaning \\\\", "\\midrule"]
+    for d in LEVELS:
+        arms = [f"placebo__{d}", f"placebo_matched__{d}", f"placebo_bias__{d}", f"frozen__{d}"]
+        if not all(a in mean.index for a in arms) or f"dec_meaning_{d}" not in by_key.index:
+            continue
+        v = [100 * mean[a] for a in arms]
+        r = by_key.loc[f"dec_meaning_{d}"]
+        ci = f"{100*r['mean_diff']:+.1f} [{100*r['ci_lo']:+.1f}, {100*r['ci_hi']:+.1f}]"
+        md.append(f"| {d} | " + " | ".join(f"{x:.1f}" for x in v) + f" | {ci} |")
+        tex.append(d.replace("_", "\\_") + " & " + " & ".join(f"{x:.1f}" for x in v) + f" & {ci} \\\\")
+    tex += ["\\bottomrule", "\\end{tabular}", FIT_END, "\\end{table}"]
+    return "\n".join(md), "\n".join(tex)
 
 
 def ablation_comparisons(group: str) -> list[Comparison]:
@@ -165,7 +214,7 @@ def emit_numbers(agg_by_prefix: dict[str, pd.DataFrame], extra: dict[str, str], 
     for prefix, agg in agg_by_prefix.items():
         for _, r in agg.iterrows():
             arm = r["arm"]
-            for metric in ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "CR", "CR_clean_paired", "max_drawdown", "signal_deviation", "hold_rate"]:
+            for metric in ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "CR", "CR_clean_paired", "max_drawdown", "signal_deviation", "hold_rate"]:
                 if f"{metric}_mean" not in agg.columns or pd.isna(r[f"{metric}_mean"]):
                     continue
                 m, sd = r[f"{metric}_mean"], r[f"{metric}_std"]
@@ -201,13 +250,13 @@ def main() -> None:
 
     pipe = root / "pipeline" / "pipeline_summary.csv"
     if pipe.exists():
-        agg = pd.read_csv(pipe)
+        full = pd.read_csv(pipe)
         order = ["clean__none", "placebo__none", "injected__none", "clean__grounded", "placebo__grounded", "injected__grounded", "frozen__grounded",
                  "clean__grounded_risk", "placebo__grounded_risk", "injected__grounded_risk", "frozen__grounded_risk"]
-        agg = agg.set_index("arm").reindex([o for o in order if o in set(agg["arm"])]).reset_index()
-        aggs["M"] = agg
+        agg = full.set_index("arm").reindex([o for o in order if o in set(full["arm"])]).reset_index()
+        aggs["M"] = full  # macros for every arm (incl. matched placebos); the main table shows the ordered subset
         extra["NseedsRun"] = str(int(agg["n_seeds"].iloc[0]))
-        cols_attack = ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "signal_deviation", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"]
+        cols_attack = ["MER", "MER_lift", "ASR", "ASR_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_active", "ASR_active_net", "signal_deviation", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"]
         md += ["## Main results (clean / placebo / injected × defence level)", "",
                "`injected__*` face an adaptive attacker; `frozen__*` replay the attack recorded against the undefended agent of the same seed "
                "(`frozen__none` ≡ `injected__none`, so it is omitted).", "", md_table(agg, cols_attack), ""]
@@ -223,6 +272,18 @@ def main() -> None:
                 md += ["## Paired comparisons: main experiment", "", stats_markdown(st), ""]
                 (tex_dir / "stats_main.tex").write_text(stats_latex(st, "Paired comparisons over seeds (main experiment): mean difference in percentage points, 95\\% bootstrap CI, "
                                                                         "sign-flip permutation $p$ with Holm correction per family (bold: $p_{\\mathrm{Holm}}<0.05$).", "tab:stats_main"))
+            st_c = compare(pd.read_csv(runs_csv), control_comparisons())
+            if not st_c.empty:
+                save_csv(st_c, root / "pipeline" / "pipeline_stats_controls.csv")
+                add_stats(st_c)
+                dec_md, dec_tex = decomposition_tables(full, st_c)
+                md += ["## Matched controls: ASR decomposition on the frozen tape", "",
+                       "Each column adds one ingredient of the attack to the treated pool (same seed, same tape). "
+                       "Meaning = frozen attack − (count-matched placebo + bias).", "", dec_md, "",
+                       "## Paired comparisons: matched controls and one-step counterfactual ASR", "", stats_markdown(st_c), ""]
+                (tex_dir / "asr_decomposition.tex").write_text(dec_tex)
+                (tex_dir / "stats_controls.tex").write_text(stats_latex(st_c, "Matched placebo decomposition and one-step counterfactual ASR (cf-ASR: the treated agent's text and bias "
+                                                                             "applied to the clean agent's state each day); conventions as in Table~\\ref{tab:stats_main}.", "tab:stats_controls"))
         # defence robustness gain table
         inj = agg[agg["arm"].str.startswith("injected__")].copy()
         inj["defence"] = inj["arm"].str.replace("injected__", "")

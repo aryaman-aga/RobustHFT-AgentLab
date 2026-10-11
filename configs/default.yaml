@@ -85,6 +85,7 @@ backtest:
 
 experiment:
   n_seeds: 30                  # paired seeds; CIs and permutation tests need >=20 (5 was too few)
+  counterfactual_asr: true     # one-step counterfactual ASR: treated text/bias on the clean agent's state (+1 agent step/day)
   arms:                        # standard comparison arms
     - clean
     - injected

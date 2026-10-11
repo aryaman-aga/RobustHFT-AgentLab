@@ -157,12 +157,16 @@ sequenceDiagram
     loop 3 defence levels
       S->>R: RunSpec(frozen__level, injection=replay), tape of injected__none
       R-->>S: metrics (frozen__none must equal injected__none)
+      S->>R: RunSpec(placebo_matched / placebo_bias __level), same tape
+      R-->>S: matched controls -> ASR decomposition (count, bias, meaning)
     end
   end
   S->>S: attach_net_asr, aggregate mean/std/bootstrap CI, plots
 ```
 
 `run_ablation.py` repeats the loop with dotted overrides per variant (the defence and κ groups also replay the frozen tape); `make_report_tables.py` collects everything into `outputs/report.md`, `paper/tables/*.tex` and `paper/figures/`, and runs the paired comparisons of `evaluation/stats.py` (bootstrap CI, sign-flip permutation test, Holm correction per family).
+
+**One-step counterfactual.** Inside every run a third agent decides each day with deep copies of the shadow's memory and portfolio plus the treated pool and bias (`cf_action` → `ASR_cf`). It never writes back, so the shadow/treated trajectories are untouched.
 
 **Randomness.** Each component draws from `rhal.seeding.rng(master, *tags)`. MisGen is seeded by (seed, injection type) and uses one stream per (day, item), so all arms of a seed share the attacker's random numbers; an arm's name never enters a seed.
 
