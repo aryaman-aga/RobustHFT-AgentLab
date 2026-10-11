@@ -23,7 +23,8 @@ Matched placebo controls (built from the same tape, so exact for the frozen sett
   * placebo_bias    -- placebo_matched plus the attack's daily bias contexts.
 All placebo variants share one paraphrase stream per (day, item), so a matched pool
 is a subset of the classic placebo pool. This splits ASR into pool noise, count,
-bias and meaning: meaning = ASR(frozen) - ASR(placebo_bias).
+bias and meaning: meaning = ASR(frozen) - ASR(placebo_bias). Because the controls copy
+one tape, ASR_net_matched is only reported for arms that face it (frozen__*, injected__none).
 
 One-step counterfactual ASR (experiment.counterfactual_asr): after the first flip the
 treated agent's portfolio and memory drift from the shadow's, so later flips can come
@@ -312,15 +313,31 @@ NET_COLUMNS = {
     "ASR_net_matched": ("ASR", "placebo_bias__"),  # meaning only: same items, count and bias as the attack
     "ASR_cf_net_matched": ("ASR_cf", "placebo_bias__"),
 }
+# Partners built from the TAPE_SOURCE_ARM tape: they are matched controls only for arms that face that tape.
+TAPE_PARTNER_PREFIXES = ("placebo_matched__", "placebo_bias__")
+
+
+def faces_tape(arm: str) -> bool:
+    """True if the arm's attack is exactly the recorded tape: every frozen arm and the arm the tape came from.
+
+    An adaptive attack on a defended agent (injected__grounded, ...) learns its own strategy mix, so it
+    injects other items and bias types than the tape; a tape-matched placebo is not its matched control.
+    """
+    return arm.startswith("frozen__") or arm == TAPE_SOURCE_ARM
 
 
 def attach_net_asr(rows: list[dict]) -> list[dict]:
-    """Add the NET_COLUMNS per (seed, defence) onto injected and frozen rows; NaN elsewhere or if a partner is missing."""
+    """Add the NET_COLUMNS per (seed, defence) onto injected and frozen rows; NaN elsewhere or if a partner is missing.
+
+    The tape-matched columns (``*_net_matched``) are only filled for arms that face the tape (see ``faces_tape``).
+    """
     by = {(r["seed"], r["arm"]): r for r in rows}
     for r in rows:
         prefix = next((p for p in TREATED_PREFIXES if r["arm"].startswith(p)), None)
         for col, (metric, partner_prefix) in NET_COLUMNS.items():
-            partner = by.get((r["seed"], partner_prefix + r["arm"][len(prefix):])) if prefix is not None else None
+            partner = None
+            if prefix is not None and (partner_prefix not in TAPE_PARTNER_PREFIXES or faces_tape(r["arm"])):
+                partner = by.get((r["seed"], partner_prefix + r["arm"][len(prefix):]))
             if partner is not None and metric in r and metric in partner:
                 r[col] = r[metric] - partner[metric]
             else:
