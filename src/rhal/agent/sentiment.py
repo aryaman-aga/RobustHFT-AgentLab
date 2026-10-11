@@ -15,7 +15,8 @@ from .. import lexicon as L
 
 _TOKEN = re.compile(r"[a-z0-9'%.$]+")
 _UPDOWN = re.compile(r"\b(up|down|rose|fell|gained|dropped|surged|plunged|jumped|tumbled|climbed|declined|soared|slumped|rallied|collapsed)\s+(\d+(?:\.\d+)?)%")
-_PHRASES = sorted(set(L.POSITIVE) | set(L.NEGATIVE), key=len, reverse=True)
+# longest first; ties broken alphabetically so the order (and float summation) never depends on PYTHONHASHSEED
+_PHRASES = sorted(set(L.POSITIVE) | set(L.NEGATIVE), key=lambda p: (-len(p), p))
 _WEIGHT = {**L.POSITIVE, **L.NEGATIVE}
 
 

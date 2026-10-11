@@ -151,11 +151,15 @@ class Simulation:
         self.t1 = n - 1  # decisions at t in [t0, t1), executed at t+1 <= n-1
         if self.t0 < 100:
             raise ValueError(f"not enough history: n_days={n}, eval_days={cfg.data.eval_days} (need >=100 warmup)")
+        # Text models (retrieval TF-IDF, attacker similarity filter) are fit ONLY on news dated before
+        # the evaluation window. Fitting on the whole corpus let future articles' vocabulary/IDF move
+        # earlier decisions -- lookahead through text (tests/test_text_nolookahead.py).
+        self.text_background = dataset.news.loc[dataset.news["date"].astype(str) < dataset.dates[self.t0], "text"].tolist()
 
     # -- builders ----------------------------------------------------------
     def _agent(self, cfg: Config, spec: RunSpec) -> TradingAgent:
         zc = ["z_" + c for c in feature_columns(spec.micro)]
-        retr = Retriever(cfg.retrieval.method, cfg.retrieval.top_k, cfg.retrieval.recency_days, cfg.retrieval.recency_decay, background=self.ds.news["text"].tolist())
+        retr = Retriever(cfg.retrieval.method, cfg.retrieval.top_k, cfg.retrieval.recency_days, cfg.retrieval.recency_decay, background=self.text_background)
         perc = Perceiver(self.ds.feats, retr, self.ds.dates)
         ev = EvidenceBuilder(self.ds.feats, zc, micro=spec.micro, window=cfg.grounding.window, horizon=cfg.grounding.horizon, top_k=cfg.grounding.top_k) if spec.grounded else None
         if cfg.agent.mode == "rule":
@@ -180,7 +184,7 @@ class Simulation:
         # Every placebo variant uses the "placebo" key, so the same (day, item) gets the same paraphrase.
         key = "misgen" if spec.injection == "misgen" else "placebo"
         return MisGenEngine(
-            seed=child_seed(self.seed, "misgen", key), background_corpus=self.ds.news["text"].tolist(), detector=self.det,
+            seed=child_seed(self.seed, "misgen", key), background_corpus=self.text_background, detector=self.det,
             bias_prob=m.bias_prob, use_bias=m.use_bias, use_minor=m.use_minor, use_rewrite=m.use_rewrite, use_filter=m.use_filter,
             use_feedback=m.use_feedback, alpha=m.alpha, delta=m.delta, max_tries=m.max_tries, tau_sim=m.sim_threshold, tau_det=m.det_threshold,
             injection_ratio=1.0 if matched else m.injection_ratio,  # matched: paraphrase exactly the tape's items

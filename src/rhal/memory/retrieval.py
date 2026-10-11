@@ -32,6 +32,8 @@ class Retriever:
         # TF-IDF vocabulary/IDF is fit ONCE on a fixed background corpus so that a
         # document's score does not change when other documents enter the pool
         # (mirrors a frozen embedding model; avoids pool-composition artifacts).
+        # The caller must pass only text available before the decisions it scores
+        # (Simulation uses news dated before the evaluation window).
         self._tfidf = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True)
         self._tfidf.fit(background if background else ["placeholder"])
         if method == "embed":
