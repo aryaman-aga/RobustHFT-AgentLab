@@ -84,11 +84,5 @@ backtest:
   execution: next_open         # decisions at close t execute at open t+1 (no lookahead)
 
 experiment:
-  n_seeds: 30                  # paired seeds; CIs and permutation tests need >=20 (5 was too few)
+  n_seeds: 100                 # paired seeds behind the paper (pipeline ~20 min, ablations ~1 h); --seeds 30 for quick runs
   counterfactual_asr: true     # one-step counterfactual ASR: treated text/bias on the clean agent's state (+1 agent step/day)
-  arms:                        # standard comparison arms
-    - clean
-    - injected
-    - injected_grounded
-    - injected_grounded_risk
-    - placebo

@@ -14,7 +14,7 @@ RobustHFT-AgentLab (`rhal`): an offline, deterministic research framework (B.Tec
 
 ## Environment
 - Use the venv: `.venv/bin/python` (Python 3.13, pandas 3.0, numpy 2.5, scikit-learn 1.9). `make install` creates it. Never install globally.
-- Run tests with `.venv/bin/python -m pytest tests/ -q` (~1 min). Run everything with `make all` (30 seeds: pipeline ~7 min, ablations ~25 min; use `--seeds 2` for smoke runs).
+- Run tests with `.venv/bin/python -m pytest tests/ -q` (~1 min). Run everything with `make all` (100 seeds: pipeline ~20 min, ablations ~1 h; `--seeds 30` for quick runs; use `--seeds 2` for smoke runs).
 - Machine note: keep concurrency low (RAM-limited). Scripts are single-process by design; don't parallelise seeds with multiprocessing without asking.
 
 ## Layout and where things live
@@ -25,7 +25,7 @@ RobustHFT-AgentLab (`rhal`): an offline, deterministic research framework (B.Tec
 - Matched controls `placebo_matched__*` / `placebo_bias__*` are also built from that tape (`TAPE_INJECTIONS`). The per-day `cf_action` (one-step counterfactual) comes from a third agent that only gets *copies* of the shadow's memory/portfolio. Never let it mutate shadow or treated state: `tests/test_controls.py` checks that switching it off leaves every other metric bit-identical.
 - New comparisons that should not move existing Holm p-values go in a NEW family (see `control_comparisons()` in `make_report_tables.py`).
 - Step records are plain dicts (`Simulation._rec`); `evaluation/metrics.py` consumes them. Add new per-step fields there, then to metrics, then to `report.KEY_COLS` if they should be tabulated.
-- LaTeX tables in `paper/tables/` and figures in `paper/figures/` are **generated** by `scripts/make_report_tables.py`; never hand-edit them. Edit prose in `paper/main.tex`. `paper/ieee_paper.tex` is an older hand-typed draft (stale numbers) — see `paper/README.md`.
+- LaTeX tables in `paper/tables/` and figures in `paper/figures/` are **generated** by `scripts/make_report_tables.py`; never hand-edit them. Edit prose in `paper/main.tex`.
 - `outputs/` is git-ignored; anything the paper needs must be copied into `paper/` by the report script. Docs live in `docs/`, BTP reports in `reports/<phase>/`.
 
 ## Conventions
