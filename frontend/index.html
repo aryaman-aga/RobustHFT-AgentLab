@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RobustHFT-AgentLab</title>
+<meta name="description" content="Animated showcase: how synthetic financial misinformation flips a simulated LLM trading agent's decisions, and which defences help.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="brand-dot"></span>RobustHFT-AgentLab</a>
+    <nav aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#replay">With vs without</a>
+      <a href="#results">Results</a>
+      <a href="#about">About</a>
+    </nav>
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle light/dark theme" title="Toggle theme">◐</button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <canvas id="hero-canvas" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <div class="hero-inner">
+        <p class="eyebrow">B.Tech project · offline red-teaming lab for trading agents</p>
+        <h1>Can <span class="hl">fake financial news</span> trick a trading agent?</h1>
+        <p class="lede">We slip subtle, synthetic misinformation into a simulated LLM-style trading agent's news feed, watch which decisions flip, and measure what actually protects it. Everything runs offline on synthetic data. No real news is altered, and no trade ever leaves the simulator.</p>
+        <div class="tiles" id="hero-tiles"></div>
+        <a class="cta" href="#replay">▶ Watch it happen</a><a class="cta cta-2" href="#how">How it works</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="how">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="kicker">How it works</div>
+        <h2>One trading day, step by step</h2>
+        <p>Two identical agents trade the same market in lockstep. One reads only clean news. The other also reads whatever the attacker injected. Any day they decide differently is a <b>flip</b>, and the share of flipped days is the attack success rate (ASR). Click any box to learn more.</p>
+      </div>
+      <div class="pipe-card reveal">
+        <svg id="pipeline-svg" viewBox="0 0 1120 400" role="img" aria-label="Animated pipeline of one simulated trading day"></svg>
+        <div class="pipe-info" aria-live="polite">
+          <div class="pipe-step" id="pipe-step">1</div>
+          <div><h3 id="pipe-title"></h3><p id="pipe-text"></p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="replay">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="kicker">With vs without</div>
+        <h2>Watch the same 60 trading days, side by side</h2>
+        <p>Pick a comparison. Both panels replay the same market day by day. <b>⚡</b> marks a day where the agent decided differently from its clean twin. Triangles are trades (▲ buy, ▼ sell); dots are holds.</p>
+      </div>
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <p class="scenario-desc" id="scenario-desc"></p>
+      <div class="panels" id="panels"></div>
+      <div class="transport" role="group" aria-label="Replay controls">
+        <button class="tbtn" id="btn-restart" aria-label="Restart" title="Restart">⟲</button>
+        <button class="tbtn" id="btn-back" aria-label="Previous day" title="Previous day">◀</button>
+        <button class="tbtn play" id="btn-play" aria-label="Play" title="Play / pause">▶</button>
+        <button class="tbtn" id="btn-fwd" aria-label="Next day" title="Next day">▶︎|</button>
+        <input type="range" id="scrub" min="1" max="60" value="1" aria-label="Trading day">
+        <span class="daylbl" id="daylbl">Day 1 / 60</span>
+        <select class="speed" id="speed" aria-label="Playback speed">
+          <option value="1">1 day/s</option>
+          <option value="2" selected>2 days/s</option>
+          <option value="4">4 days/s</option>
+          <option value="8">8 days/s</option>
+        </select>
+      </div>
+      <div class="verdict" id="verdict" aria-live="polite"></div>
+      <p class="note" id="replay-note"></p>
+    </div>
+  </section>
+
+  <section class="block" id="results">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="kicker">Results</div>
+        <h2 id="results-title">What the full experiment says</h2>
+        <p id="results-sub">One replay is a single story. These numbers come from many independent simulated markets, compared pair by pair, with 95% confidence intervals.</p>
+      </div>
+      <div class="res-grid">
+        <div class="rcard reveal">
+          <h3>Why do the undefended agent's decisions flip?</h3>
+          <p class="sub" id="stack-sub"></p>
+          <div class="stack" id="stack"></div>
+          <div class="stack-axis"><span>0%</span><span id="stack-max"></span></div>
+          <div class="legend" id="stack-legend"></div>
+        </div>
+        <div class="rcard reveal">
+          <h3>Flips caused by the fake news, by defence</h3>
+          <p class="sub">Net ASR = attack flips minus placebo flips (the noise floor). Lower is better; whiskers show the 95% CI.</p>
+          <div class="bars" id="netbars"></div>
+        </div>
+      </div>
+      <div class="findings" id="findings"></div>
+      <details class="tableview reveal">
+        <summary>Show all numbers as a table</summary>
+        <table class="num" id="numtable"></table>
+      </details>
+    </div>
+  </section>
+
+  <footer id="about">
+    <div class="wrap">
+      <div class="safety">
+        <span aria-hidden="true">🛡</span>
+        <div><b>Safety boundary.</b> RobustHFT-AgentLab is a closed simulation for defensive research. The market, the company and all news are synthetic. Generated misinformation never leaves the simulator; this page shows only its <i>labels</i> (edit type, rewrite style), never its text. There is no broker connection and no live trading. Not investment advice.</div>
+      </div>
+      <p id="footer-meta" class="muted"></p>
+    </div>
+  </footer>
+</main>
+
+<div class="tooltip" id="tooltip" role="tooltip"></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

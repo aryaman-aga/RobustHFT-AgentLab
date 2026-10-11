@@ -2,7 +2,7 @@
 PY := .venv/bin/python
 PIP := $(PY) -m pip
 
-.PHONY: venv install install-optional data test test-fast pipeline ablation report train-detector paper clean all
+.PHONY: venv install install-optional data test test-fast pipeline ablation report frontend train-detector paper clean all
 
 venv:
 	python3 -m venv .venv
@@ -36,13 +36,17 @@ ablation:
 report:
 	$(PY) scripts/make_report_tables.py
 
+# Animated showcase: writes frontend/data.js, then open frontend/index.html in a browser (works offline)
+frontend:
+	$(PY) scripts/export_frontend_data.py
+
 # Uses tectonic if installed (brew install tectonic), else a TeX Live pdflatex+bibtex toolchain.
 paper:
 	cd paper && if command -v tectonic >/dev/null 2>&1; then tectonic main.tex; \
 	else pdflatex -interaction=nonstopmode main.tex && bibtex main && pdflatex -interaction=nonstopmode main.tex && pdflatex -interaction=nonstopmode main.tex; fi
 
 # Full happy path from a fresh clone
-all: install data train-detector test pipeline ablation report
+all: install data train-detector test pipeline ablation report frontend
 
 clean:
 	rm -rf outputs/* .pytest_cache

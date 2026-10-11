@@ -36,6 +36,6 @@ paper/*.pdf
 .vscode/
 .idea/
 
-# --- Local scratch and Claude Code session worktrees, not part of the project -
+# --- Local scratch and Claude Code files (session worktrees, preview config) --
 scratch/
-.claude/worktrees/
+.claude/
