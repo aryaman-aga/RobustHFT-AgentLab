@@ -17,16 +17,103 @@ import pandas as pd
 from _common import ROOT, base_parser, parse_overrides
 
 from rhal.config import load_config
-from rhal.utils.io import ensure_dir
+from rhal.evaluation.stats import Comparison, compare
+from rhal.utils.io import ensure_dir, save_csv
 
 PCT = {"MER", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_given_exposed", "exposure_rate", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"}
 PAPER_FIGURES = ["fig_frontier.png", "fig_equity.png", "fig_exposure.png"]
+# Generated tables shrink to the available width only when they would overflow it (needs \\usepackage{adjustbox}).
+FIT_BEGIN, FIT_END = "\\begin{adjustbox}{max width=\\linewidth}", "\\end{adjustbox}"
+WIDE_COLS = 6  # arm tables with this many metric columns become two-column table*
+
+
+# ---------------------------------------------------------------------------
+# Paired comparisons (mean over seeds of metric(A) - metric(B)). Holm is applied per family.
+# Sign convention for defence/component rows: positive = the thing named second lowers the metric.
+# ---------------------------------------------------------------------------
+def main_comparisons() -> list[Comparison]:
+    C, out = Comparison, []
+    fam = "Misinformation effect beyond placebo"
+    for d in ("none", "grounded", "grounded_risk"):
+        out.append(C(f"net_{d}", fam, f"net ASR, adaptive, {d}", "ASR", f"injected__{d}", f"placebo__{d}"))
+    for d in ("grounded", "grounded_risk"):
+        out.append(C(f"net_frozen_{d}", fam, f"net ASR, frozen, {d}", "ASR", f"frozen__{d}", f"placebo__{d}"))
+    for d in ("none", "grounded", "grounded_risk"):
+        out.append(C(f"actnet_{d}", fam, f"net active ASR, adaptive, {d}", "ASR_active", f"injected__{d}", f"placebo__{d}"))
+    for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
+        fam = f"Defence gain, {setting} attack"
+        for d in ("grounded", "grounded_risk"):
+            out.append(C(f"gain_{setting}_{d}_asr", fam, f"ASR: none $-$ {d}", "ASR", f"{pre}__none", f"{pre}__{d}"))
+            out.append(C(f"gain_{setting}_{d}_net", fam, f"net ASR: none $-$ {d}", "ASR_net", f"{pre}__none", f"{pre}__{d}"))
+            out.append(C(f"gain_{setting}_{d}_actnet", fam, f"net active ASR: none $-$ {d}", "ASR_active_net", f"{pre}__none", f"{pre}__{d}"))
+        out.append(C(f"gain_{setting}_risk_net", fam, "net ASR: grounded $-$ grounded_risk", "ASR_net", f"{pre}__grounded", f"{pre}__grounded_risk"))
+        out.append(C(f"gain_{setting}_risk_actnet", fam, "net active ASR: grounded $-$ grounded_risk", "ASR_active_net", f"{pre}__grounded", f"{pre}__grounded_risk"))
+    fam = "Placebo (retrieval-noise) sensitivity"
+    for d in ("grounded", "grounded_risk"):
+        out.append(C(f"placebo_{d}", fam, f"placebo ASR: none $-$ {d}", "ASR", "placebo__none", f"placebo__{d}"))
+    fam = "Costs"
+    for d in ("grounded", "grounded_risk"):
+        out.append(C(f"cost_{d}", fam, f"clean CR: none $-$ {d}", "CR", "clean__none", f"clean__{d}"))
+    out.append(C("dd_risk", fam, "attacked max DD: grounded_risk $-$ grounded", "max_drawdown", "injected__grounded_risk", "injected__grounded"))
+    return out
+
+
+def ablation_comparisons(group: str) -> list[Comparison]:
+    C, out = Comparison, []
+    if group == "attack":  # positive = removing the component weakens the attack
+        for v in ("wo_bias", "wo_feedback", "wo_filtering", "wo_minor", "wo_rewrite"):
+            out.append(C(f"abl_attack_{v}_net", "Attack components (net ASR)", f"net ASR: full $-$ {v}", "ASR_net", "injected__full", f"injected__{v}"))
+            out.append(C(f"abl_attack_{v}_mer", "Attack components (MER)", f"MER: full $-$ {v}", "MER", "injected__full", f"injected__{v}"))
+    elif group == "defense":  # positive = the second variant has lower net ASR
+        pairs = [("micro", "grounding_only", "grounding_micro"), ("grounding", "none", "grounding_only"), ("risk_alone", "none", "risk_only"),
+                 ("risk_on_top", "grounding_micro", "full_defense"), ("hold", "wo_hold_on_conflict", "full_defense")]
+        for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
+            for key, a, b in pairs:
+                out.append(C(f"abl_def_{setting}_{key}", f"Defence components, {setting} attack (net ASR)", f"{a} $-$ {b}", "ASR_net", f"{pre}__{a}", f"{pre}__{b}"))
+    elif group == "grounding_strength":  # positive = larger kappa lowers net ASR / costs clean return
+        for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
+            for lo, hi in (("0.3", "0.7"), ("0.7", "1.0")):
+                out.append(C(f"abl_kappa_{setting}_{lo}_{hi}", f"Grounding strength, {setting} attack (net ASR)", f"$\\kappa$ {lo} $-$ {hi}", "ASR_net", f"{pre}__kappa_{lo}", f"{pre}__kappa_{hi}"))
+        for lo, hi in (("0.3", "0.7"), ("0.7", "1.0")):
+            out.append(C(f"abl_kappa_cost_{lo}_{hi}", "Grounding strength (clean CR)", f"$\\kappa$ {lo} $-$ {hi}", "CR", f"clean__kappa_{lo}", f"clean__kappa_{hi}"))
+    elif group == "retrieval":  # is net ASR an artefact of top-k? (expect no difference)
+        for k in ("k2", "k8"):
+            out.append(C(f"abl_ret_{k}_net", "Retrieval breadth (net ASR)", f"net ASR: {k} $-$ k4", "ASR_net", f"injected__{k}", "injected__k4"))
+            out.append(C(f"abl_ret_{k}_placebo", "Retrieval breadth (placebo ASR)", f"placebo ASR: {k} $-$ k4", "ASR", f"placebo__{k}", "placebo__k4"))
+    return out
+
+
+def _fmt_p(p: float) -> str:
+    return "--" if pd.isna(p) else ("<0.001" if p < 0.001 else f"{p:.3f}")
+
+
+def stats_markdown(st: pd.DataFrame) -> str:
+    out = ["| family | comparison | Δ (pp) | 95% CI | p (Holm) | n |", "|---|---|---|---|---|---|"]
+    for _, r in st.iterrows():
+        sig = " *" if r["significant"] else ""
+        out.append(f"| {r['family']} | {r['label'].replace('$-$', '−').replace(chr(92) + 'kappa', 'κ').replace('$', '')} | {100*r['mean_diff']:+.1f} | [{100*r['ci_lo']:+.1f}, {100*r['ci_hi']:+.1f}] | {_fmt_p(r['p_holm'])}{sig} | {r['n']} |")
+    return "\n".join(out)
+
+
+def stats_latex(st: pd.DataFrame, caption: str, label: str) -> str:
+    lines = ["\\begin{table}[t]", "\\centering", f"\\caption{{{caption}}}", f"\\label{{{label}}}", "\\footnotesize", FIT_BEGIN,
+             "\\begin{tabular}{lrrr}", "\\toprule", "Comparison & $\\Delta$ (pp) & 95\\% CI & $p_{\\mathrm{Holm}}$ \\\\"]
+    for fam, block in st.groupby("family", sort=False):
+        lines += ["\\midrule", f"\\multicolumn{{4}}{{l}}{{\\textit{{{fam}}}}} \\\\"]
+        for _, r in block.iterrows():
+            p = _fmt_p(r["p_holm"]).replace("<", "$<$")
+            p = f"\\textbf{{{p}}}" if r["significant"] else p
+            label = r["label"].replace("_", "\\_")  # (no backslashes inside f-string braces before Python 3.12)
+            lines.append(f"{label} & {100*r['mean_diff']:+.1f} & [{100*r['ci_lo']:+.1f}, {100*r['ci_hi']:+.1f}] & {p} \\\\")
+    lines += ["\\bottomrule", "\\end{tabular}", FIT_END, "\\end{table}"]
+    return "\n".join(lines)
 
 
 def latex_table(agg: pd.DataFrame, cols: list[str], caption: str, label: str, arm_map=None) -> str:
     cols = [c for c in cols if f"{c}_mean" in agg.columns]
     head = " & ".join(["Arm"] + [c.replace("_", "\\_") for c in cols]) + " \\\\"
-    lines = ["\\begin{table}[t]", "\\centering", f"\\caption{{{caption}}}", f"\\label{{{label}}}", "\\small",
+    env = "table*" if len(cols) >= WIDE_COLS else "table"  # wide tables span both IEEE columns
+    lines = [f"\\begin{{{env}}}[t]", "\\centering", f"\\caption{{{caption}}}", f"\\label{{{label}}}", "\\small", FIT_BEGIN,
              "\\begin{tabular}{l" + "r" * len(cols) + "}", "\\toprule", head, "\\midrule"]
     for _, r in agg.iterrows():
         cells = []
@@ -40,7 +127,7 @@ def latex_table(agg: pd.DataFrame, cols: list[str], caption: str, label: str, ar
                 cells.append(f"{m:.2f}$\\pm${s:.2f}")
         name = (arm_map(r["arm"]) if arm_map else r["arm"]).replace("_", "\\_")
         lines.append(f"{name} & " + " & ".join(cells) + " \\\\")
-    lines += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
+    lines += ["\\bottomrule", "\\end{tabular}", FIT_END, f"\\end{{{env}}}"]
     return "\n".join(lines)
 
 
@@ -99,18 +186,43 @@ def main() -> None:
     aggs: dict[str, pd.DataFrame] = {}
     extra: dict[str, str] = {"Nseeds": str(cfg.experiment.n_seeds), "NevalDays": str(cfg.data.eval_days), "NewsPerDay": str(cfg.data.news_per_day), "NDays": str(cfg.data.n_days),
                              "Kappa": f"{cfg.grounding.strength:.1f}", "TopK": str(cfg.retrieval.top_k), "FeeBps": f"{cfg.backtest.fee_bps:.0f}", "SlipBps": f"{cfg.backtest.slippage_bps:.0f}"}
-    md = ["# RobustHFT-AgentLab -- experiment report", "", "All numbers: mean ± std over seeds; percentages where applicable. Offline synthetic simulation; not investment advice.", ""]
+    md = ["# RobustHFT-AgentLab -- experiment report", "",
+          "Arm tables: mean ± std over seeds; percentages where applicable. Paired comparisons: mean per-seed difference (percentage points), "
+          "95% percentile-bootstrap CI over seeds, two-sided sign-flip permutation p-value with Holm correction within each family (* = p_Holm < 0.05). "
+          "Offline synthetic simulation; not investment advice.", ""]
+
+    def add_stats(st: pd.DataFrame) -> None:
+        """Expose every comparison to the paper as \\val{Cmp<Key>}, ...Lo, ...Hi, ...P (Holm)."""
+        for _, r in st.iterrows():
+            extra[_macro_name("Cmp", r["key"])] = f"{100*r['mean_diff']:.1f}"
+            extra[_macro_name("Cmp", r["key"], "lo")] = f"{100*r['ci_lo']:.1f}"
+            extra[_macro_name("Cmp", r["key"], "hi")] = f"{100*r['ci_hi']:.1f}"
+            extra[_macro_name("Cmp", r["key"], "p")] = _fmt_p(r["p_holm"]).replace("<", "$<$")
 
     pipe = root / "pipeline" / "pipeline_summary.csv"
     if pipe.exists():
         agg = pd.read_csv(pipe)
-        order = ["clean__none", "placebo__none", "injected__none", "clean__grounded", "placebo__grounded", "injected__grounded", "clean__grounded_risk", "placebo__grounded_risk", "injected__grounded_risk"]
+        order = ["clean__none", "placebo__none", "injected__none", "clean__grounded", "placebo__grounded", "injected__grounded", "frozen__grounded",
+                 "clean__grounded_risk", "placebo__grounded_risk", "injected__grounded_risk", "frozen__grounded_risk"]
         agg = agg.set_index("arm").reindex([o for o in order if o in set(agg["arm"])]).reset_index()
         aggs["M"] = agg
         extra["NseedsRun"] = str(int(agg["n_seeds"].iloc[0]))
         cols_attack = ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "signal_deviation", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"]
-        md += ["## Main results (clean / placebo / injected × defence level)", "", md_table(agg, cols_attack), ""]
-        (tex_dir / "main_results.tex").write_text(latex_table(agg, ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active_net", "CR", "max_drawdown"], "Main results on synthetic data (mean$\\pm$std over seeds; \\%). Net ASR $=$ ASR $-$ ASR$_{\\text{placebo}}$.", "tab:main"))
+        md += ["## Main results (clean / placebo / injected × defence level)", "",
+               "`injected__*` face an adaptive attacker; `frozen__*` replay the attack recorded against the undefended agent of the same seed "
+               "(`frozen__none` ≡ `injected__none`, so it is omitted).", "", md_table(agg, cols_attack), ""]
+        (tex_dir / "main_results.tex").write_text(latex_table(agg, ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active_net", "CR", "max_drawdown"],
+                                                              "Main results on synthetic data (mean$\\pm$std over seeds; \\%). Net ASR $=$ ASR $-$ ASR$_{\\text{placebo}}$. "
+                                                              "\\texttt{frozen} rows replay the attack recorded against the undefended agent, so every defence faces identical documents.", "tab:main"))
+        runs_csv = root / "pipeline" / "pipeline_runs.csv"
+        if runs_csv.exists():
+            st = compare(pd.read_csv(runs_csv), main_comparisons())
+            if not st.empty:
+                save_csv(st, root / "pipeline" / "pipeline_stats.csv")
+                add_stats(st)
+                md += ["## Paired comparisons: main experiment", "", stats_markdown(st), ""]
+                (tex_dir / "stats_main.tex").write_text(stats_latex(st, "Paired comparisons over seeds (main experiment): mean difference in percentage points, 95\\% bootstrap CI, "
+                                                                        "sign-flip permutation $p$ with Holm correction per family (bold: $p_{\\mathrm{Holm}}<0.05$).", "tab:stats_main"))
         # defence robustness gain table
         inj = agg[agg["arm"].str.startswith("injected__")].copy()
         inj["defence"] = inj["arm"].str.replace("injected__", "")
@@ -127,6 +239,7 @@ def main() -> None:
             md.append(f"| {r['defence']} | {100*r['ASR_mean']:.1f} | {100*r['ASR_net_mean']:.1f} | {'--' if pd.isna(act) else f'{100*act:.1f}'} | {100*r['robustness_gain_ASR']:+.1f} | {100*r['robustness_gain_net']:+.1f} | {100*r['CR_clean_paired_mean']:+.1f} | {100*r['max_drawdown_mean']:+.1f} |")
         md.append("")
 
+    abl_stats: list[pd.DataFrame] = []
     for group, cols in [("attack", ["MER", "MER_lift", "ASR", "ASR_net", "CR"]), ("defense", ["ASR", "ASR_net", "ASR_active_net", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"]), ("retrieval", ["MER", "ASR", "ASR_net", "CR"]), ("grounding_strength", ["ASR", "ASR_net", "CR", "CR_clean_paired"])]:
         f = root / "ablation" / group / f"ablation_{group}_summary.csv"
         if f.exists():
@@ -134,6 +247,17 @@ def main() -> None:
             aggs[_macro_name("Abl", group)] = agg
             md += [f"## Ablation: {group}", "", md_table(agg, cols), ""]
             (tex_dir / f"ablation_{group}.tex").write_text(latex_table(agg, cols, f"Ablation ({group.replace('_', ' ')}), mean$\\pm$std over seeds.", f"tab:abl_{group}"))
+            runs_csv = root / "ablation" / group / f"ablation_{group}_runs.csv"
+            if runs_csv.exists():
+                st = compare(pd.read_csv(runs_csv), ablation_comparisons(group))
+                if not st.empty:
+                    save_csv(st, root / "ablation" / group / f"ablation_{group}_stats.csv")
+                    add_stats(st)
+                    abl_stats.append(st)
+                    md += [f"### Paired comparisons: {group}", "", stats_markdown(st), ""]
+    if abl_stats:
+        (tex_dir / "stats_ablation.tex").write_text(stats_latex(pd.concat(abl_stats, ignore_index=True), "Paired comparisons over seeds (ablations); conventions as in Table~\\ref{tab:stats_main}. "
+                                                                "Positive $\\Delta$: the second-named variant has the lower value.", "tab:stats_ablation"))
 
     meta = root / "models" / "detector_meta.json"
     if meta.exists():

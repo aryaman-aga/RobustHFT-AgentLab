@@ -152,13 +152,19 @@ sequenceDiagram
     S->>P: prices, news, features
     loop 3 defence levels x {clean, placebo, injected}
       S->>R: RunSpec
-      R-->>S: metrics, step logs, misgen summary
+      R-->>S: metrics, step logs, misgen summary, AttackTape (injected only)
+    end
+    loop 3 defence levels
+      S->>R: RunSpec(frozen__level, injection=replay), tape of injected__none
+      R-->>S: metrics (frozen__none must equal injected__none)
     end
   end
-  S->>S: attach_net_asr, aggregate mean±std, plots
+  S->>S: attach_net_asr, aggregate mean/std/bootstrap CI, plots
 ```
 
-`run_ablation.py` repeats the loop with dotted overrides per variant; `make_report_tables.py` collects everything into `outputs/report.md` and `paper/tables/*.tex`.
+`run_ablation.py` repeats the loop with dotted overrides per variant (the defence and κ groups also replay the frozen tape); `make_report_tables.py` collects everything into `outputs/report.md`, `paper/tables/*.tex` and `paper/figures/`, and runs the paired comparisons of `evaluation/stats.py` (bootstrap CI, sign-flip permutation test, Holm correction per family).
+
+**Randomness.** Each component draws from `rhal.seeding.rng(master, *tags)`. MisGen is seeded by (seed, injection type) and uses one stream per (day, item), so all arms of a seed share the attacker's random numbers; an arm's name never enters a seed.
 
 ## 6. The surrogate agent (mock-LLM) in equations
 

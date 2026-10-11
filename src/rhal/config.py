@@ -110,7 +110,7 @@ class BacktestCfg(BaseModel):
 
 
 class ExperimentCfg(BaseModel):
-    n_seeds: int = 5
+    n_seeds: int = 30
     arms: list[str] = Field(default_factory=lambda: ["clean", "injected", "injected_grounded", "injected_grounded_risk", "placebo"])
 
 
