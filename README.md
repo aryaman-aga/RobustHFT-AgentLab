@@ -31,6 +31,7 @@ python -m pytest tests/ -q                      # full test suite, ~40 s
 python scripts/run_pipeline.py                  # 18 arms x 100 seeds (~20 min) -> outputs/pipeline/
 python scripts/run_ablation.py --group all      # attack / defense / retrieval / kappa -> outputs/ablation/
 python scripts/make_report_tables.py            # outputs/report.md + paper/tables/*.tex
+python scripts/make_paper_figures.py            # paper/figures/*.pdf + Table I + figure macros
 
 # 4. paper (optional; needs a LaTeX install)
 make paper

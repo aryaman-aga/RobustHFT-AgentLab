@@ -1,0 +1,57 @@
+% Fig. 1 -- paired red-teaming harness (TikZ). Drawn on an explicit mm grid at the natural
+% IEEE text width (~178 mm), so it is NOT rescaled and its fonts match the caption.
+% Needs tikz libraries: arrows.meta, fit, backgrounds, calc; colours `attack` and `defence`.
+\begin{tikzpicture}[
+    font=\footnotesize, >={Stealth[length=3.4pt,width=3pt]},
+    box/.style={draw=black!55, rounded corners=2pt, fill=white, align=center, minimum height=10mm, inner sep=1.5pt, text width=#1},
+    att/.style={box=#1, draw=attack, fill=attack!7, line width=0.75pt},
+    dfn/.style={box=#1, draw=defence, fill=defence!8},
+    sub/.style={font=\scriptsize, text=black!62},
+    flow/.style={->, draw=black!62, line width=0.55pt},
+    aflow/.style={->, draw=attack, line width=0.8pt},
+    lane/.style={font=\scriptsize\bfseries, text=black!55, anchor=west, inner sep=0pt},
+]
+\def\yA{0mm}\def\yM{-17mm}\def\yB{-34mm}
+% ---- attacked agent (top lane) ----------------------------------------------------
+\node[box=15mm] (newsA) at (8mm,\yA) {Clean news\\[-1pt]{\scriptsize $\mathcal{N}_t$}};
+\node[att=24.5mm] (misgen) at (32mm,\yA) {\textbf{MisGen attacker}\\[-1.5pt]{\scriptsize bias $\cdot$ edit $\cdot$ rewrite}\\[-2.5pt]{\scriptsize filters $A_{\mathrm{sim}},\,A_{\mathrm{det}}$}};
+\node[box=19.5mm] (retrA) at (58mm,\yA) {Retrieval\\[-1.5pt]{\scriptsize top-$k$, clean $\cup$ synthetic}};
+\node[box=19.5mm] (agentA) at (81.5mm,\yA) {Agent\\[-1.5pt]{\scriptsize perception, profile, memory}};
+\node[dfn=19.5mm] (gA) at (105mm,\yA) {Grounding\\[-1.5pt]{\scriptsize shrink text toward $s_{\mathrm{mkt}}$}};
+\node[dfn=16.5mm] (rA) at (127mm,\yA) {Risk layer\\[-1.5pt]{\scriptsize gates, sizing, stops}};
+\node[box=9mm] (dA) at (144mm,\yA) {$a_t$};
+% ---- shared market evidence (middle) ------------------------------------------------
+\node[box=19.5mm] (mkt) at (81.5mm,\yM) {Market data\\[-1.5pt]{\scriptsize OHLCV up to day $t$}};
+\node[dfn=19.5mm] (ev) at (105mm,\yM) {Evidence $s_{\mathrm{mkt}}$\\[-1.5pt]{\scriptsize trend, micro, analogs}};
+% ---- clean twin (bottom lane) -------------------------------------------------------
+\node[box=15mm] (newsB) at (8mm,\yB) {Clean news\\[-1pt]{\scriptsize $\mathcal{N}_t$}};
+\node[box=19.5mm] (retrB) at (58mm,\yB) {Retrieval\\[-1.5pt]{\scriptsize top-$k$, clean only}};
+\node[box=19.5mm] (agentB) at (81.5mm,\yB) {Clean twin\\[-1.5pt]{\scriptsize identical agent}};
+\node[dfn=19.5mm] (gB) at (105mm,\yB) {Grounding};
+\node[dfn=16.5mm] (rB) at (127mm,\yB) {Risk layer};
+\node[box=9mm] (dB) at (144mm,\yB) {$a^{\mathrm{clean}}_t$};
+% ---- comparator ----------------------------------------------------------------------
+\node[box=20mm, fill=black!5, draw=black!70] (cmp) at (164mm,\yM) {\textbf{Flip?}\ {\scriptsize $a_t\neq a^{\mathrm{clean}}_t$}\\[-1.5pt]{\scriptsize share of days $=$ ASR}};
+% ---- edges -----------------------------------------------------------------------------
+\draw[flow] (newsA) -- (misgen);
+\draw[aflow] (misgen) -- (retrA);
+\draw[aflow] (retrA) -- (agentA);
+\draw[flow] (agentA) -- (gA);  \draw[flow] (gA) -- (rA);  \draw[flow] (rA) -- (dA);
+\draw[flow] (newsB) -- (retrB); \draw[flow] (retrB) -- (agentB); \draw[flow] (agentB) -- (gB); \draw[flow] (gB) -- (rB); \draw[flow] (rB) -- (dB);
+\draw[flow] (newsA) -- (newsB) node[midway, right=1pt, sub] {same items};
+\draw[flow] (mkt) -- (ev);
+\draw[flow] (ev) -- (gA);
+\draw[flow] (ev) -- (gB);
+\draw[flow] (dA.east) -| (cmp.north);
+\draw[flow] (dB.east) -| (cmp.south);
+% Polya-urn feedback: strategies retrieved on flipped days are reinforced
+\draw[aflow, dashed, rounded corners=3pt] (cmp.east) -- ++(2.5mm,0) |- (32mm,10.5mm)
+    node[pos=0.75, above=-0.5pt, sub, text=attack] {feedback: strategies retrieved on flipped days are reinforced (P\'olya urn)} -- (misgen.north);
+% ---- lane labels and defence band ----------------------------------------------------------
+\node[lane] at (0.5mm,7.4mm) {ATTACKED AGENT};
+\node[lane] at (10.5mm,-26.6mm) {CLEAN TWIN (CONTROL)};  % right of the `same items' arrow
+\begin{scope}[on background layer]
+  \node[draw=defence!55, dashed, rounded corners=4pt, fill=defence!3, inner sep=2mm, fit=(gA) (rA) (ev) (gB) (rB)] (band) {};
+\end{scope}
+\node[sub, text=defence, anchor=north, inner sep=1.5pt] at (band.south) {defences (each one ablated)};
+\end{tikzpicture}

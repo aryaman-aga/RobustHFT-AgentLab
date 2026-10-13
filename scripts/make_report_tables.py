@@ -2,14 +2,15 @@
 """Collect outputs/ tables into a single report.md and LaTeX tables for the paper.
 
 Reads:  outputs/pipeline/pipeline_summary.csv, outputs/ablation/*/ablation_*_summary.csv,
-        outputs/models/detector_meta.json, outputs/pipeline/fig_*.png
-Writes: outputs/report.md, paper/tables/*.tex, paper/figures/*.png
-(paper/ is self-contained so it compiles from a fresh clone, where outputs/ is empty.)
+        outputs/models/detector_meta.json
+Writes: outputs/report.md, paper/tables/*.tex (incl. numbers.tex, the macros behind every number in the prose)
+Paper figures are drawn by scripts/make_paper_figures.py; paper/ is self-contained, so it compiles from a
+fresh clone, where outputs/ is empty.
 """
 from __future__ import annotations
 
 import json
-import shutil
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -21,7 +22,6 @@ from rhal.evaluation.stats import Comparison, compare
 from rhal.utils.io import ensure_dir, save_csv
 
 PCT = {"MER", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "ASR_given_exposed", "exposure_rate", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"}
-PAPER_FIGURES = ["fig_frontier.png", "fig_equity.png", "fig_exposure.png"]
 # Generated tables shrink to the available width only when they would overflow it (needs \\usepackage{adjustbox}).
 FIT_BEGIN, FIT_END = "\\begin{adjustbox}{max width=\\linewidth}", "\\end{adjustbox}"
 WIDE_COLS = 6  # arm tables with this many metric columns become two-column table*
@@ -67,9 +67,9 @@ def control_comparisons() -> list[Comparison]:
     C, out = Comparison, []
     fam = "ASR decomposition on the frozen tape"  # placebo -> +count matching -> +bias -> attack
     for d in LEVELS:
-        out.append(C(f"dec_count_{d}", fam, f"count: placebo_matched $-$ placebo, {d}", "ASR", f"placebo_matched__{d}", f"placebo__{d}"))
-        out.append(C(f"dec_bias_{d}", fam, f"bias: placebo_bias $-$ placebo_matched, {d}", "ASR", f"placebo_bias__{d}", f"placebo_matched__{d}"))
-        out.append(C(f"dec_meaning_{d}", fam, f"meaning: frozen $-$ placebo_bias, {d}", "ASR", f"frozen__{d}", f"placebo_bias__{d}"))
+        out.append(C(f"dec_count_{d}", fam, f"count: matched $-$ placebo, {d}", "ASR", f"placebo_matched__{d}", f"placebo__{d}"))
+        out.append(C(f"dec_bias_{d}", fam, f"bias: bias-matched $-$ matched, {d}", "ASR", f"placebo_bias__{d}", f"placebo_matched__{d}"))
+        out.append(C(f"dec_meaning_{d}", fam, f"content: attack $-$ bias-matched, {d}", "ASR", f"frozen__{d}", f"placebo_bias__{d}"))
     fam = "One-step counterfactual ASR (cf-ASR)"
     for d in LEVELS:  # positive gap = sequential ASR is inflated by the treated agent's drifted state
         out.append(C(f"cf_gap_{d}", fam, f"ASR $-$ cf-ASR, adaptive, {d}", "ASR", f"injected__{d}", f"injected__{d}", metric_b="ASR_cf"))
@@ -144,6 +144,31 @@ def stats_markdown(st: pd.DataFrame) -> str:
     return "\n".join(out)
 
 
+# arm identifiers in comparison labels -> words, for the paper's appendix tables (order matters)
+PRETTY = [(r"\bplacebo_matched\b", "count-matched placebo"), (r"\bplacebo_bias\b", "bias-matched placebo"),
+          (r"\bgrounded_risk\b", "grounding + risk"), (r"\bgrounding_micro\b", "grounding + micro"),
+          (r"\bgrounding_only\b", "price-only grounding"), (r"\bfull_defense\b", "full defence"), (r"\brisk_only\b", "risk only"),
+          (r"\bwo_hold_on_conflict\b", "w/o hold-on-conflict"), (r"\bwo_minor\b", "w/o minor edits"), (r"\bwo_filtering\b", "w/o filtering"),
+          (r"\bwo_bias\b", "w/o bias prompts"), (r"\bwo_feedback\b", "w/o feedback"), (r"\bwo_rewrite\b", "w/o rewriting"),
+          (r"\bfull\b", "full attack"), (r"\bnone\b", "no defence"), (r"\bgrounded\b", "grounding"), (r"\bfrozen \$-\$", "frozen attack $-$"),
+          (r"\bk([248])\b", r"$k{=}\1$"), (r"\$\\kappa\$ ([0-9.]+) \$-\$ ([0-9.]+)", r"$\\kappa{=}\1$ $-$ $\\kappa{=}\2$")]
+
+
+# operator names (misgen.operators.MINOR_TYPES) -> the names used in the paper's text
+EDIT_TYPE_NAMES = {"flipping": "direction flip", "sentiment": "sentiment shift", "other": "vague attribution"}
+
+
+def pretty_label(label: str) -> str:
+    for pat, rep in PRETTY:
+        label = re.sub(pat, rep, label)
+    return label
+
+
+def _tex_signed(x: float) -> str:
+    """Signed one-decimal number with a typeset minus sign (a hyphen is too short in a table)."""
+    return f"{x:+.1f}".replace("-", "$-$")
+
+
 def stats_latex(st: pd.DataFrame, caption: str, label: str) -> str:
     lines = ["\\begin{table}[t]", "\\centering", f"\\caption{{{caption}}}", f"\\label{{{label}}}", "\\footnotesize", FIT_BEGIN,
              "\\begin{tabular}{lrrr}", "\\toprule", "Comparison & $\\Delta$ (pp) & 95\\% CI & $p_{\\mathrm{Holm}}$ \\\\"]
@@ -152,8 +177,8 @@ def stats_latex(st: pd.DataFrame, caption: str, label: str) -> str:
         for _, r in block.iterrows():
             p = _fmt_p(r["p_holm"]).replace("<", "$<$")
             p = f"\\textbf{{{p}}}" if r["significant"] else p
-            label = r["label"].replace("_", "\\_")  # (no backslashes inside f-string braces before Python 3.12)
-            lines.append(f"{label} & {100*r['mean_diff']:+.1f} & [{100*r['ci_lo']:+.1f}, {100*r['ci_hi']:+.1f}] & {p} \\\\")
+            label = pretty_label(r["label"]).replace("_", "\\_")  # (no backslashes inside f-string braces before Python 3.12)
+            lines.append(f"{label} & {_tex_signed(100*r['mean_diff'])} & [{_tex_signed(100*r['ci_lo'])}, {_tex_signed(100*r['ci_hi'])}] & {p} \\\\")
     lines += ["\\bottomrule", "\\end{tabular}", FIT_END, "\\end{table}"]
     return "\n".join(lines)
 
@@ -247,6 +272,10 @@ def main() -> None:
             extra[_macro_name("Cmp", r["key"], "lo")] = f"{100*r['ci_lo']:.1f}"
             extra[_macro_name("Cmp", r["key"], "hi")] = f"{100*r['ci_hi']:.1f}"
             extra[_macro_name("Cmp", r["key"], "p")] = _fmt_p(r["p_holm"]).replace("<", "$<$")
+            # the same comparison read the other way round (B - A), so prose can say "adds X pp" without a minus sign
+            extra[_macro_name("Cmp", r["key"], "neg")] = f"{-100*r['mean_diff']:.1f}"
+            extra[_macro_name("Cmp", r["key"], "neg", "lo")] = f"{-100*r['ci_hi']:.1f}"
+            extra[_macro_name("Cmp", r["key"], "neg", "hi")] = f"{-100*r['ci_lo']:.1f}"
 
     pipe = root / "pipeline" / "pipeline_summary.csv"
     if pipe.exists():
@@ -277,6 +306,11 @@ def main() -> None:
                 save_csv(st_c, root / "pipeline" / "pipeline_stats_controls.csv")
                 add_stats(st_c)
                 dec_md, dec_tex = decomposition_tables(full, st_c)
+                meaning = st_c.set_index("key").loc["dec_meaning_none", "mean_diff"] if "dec_meaning_none" in set(st_c["key"]) else None
+                if meaning:
+                    naive = float(full.set_index("arm").loc["injected__none", "ASR_mean"])
+                    extra["RatioNaiveToMeaning"] = f"{naive / meaning:.1f}"      # naive ASR / content effect
+                    extra["ShareMeaningOfNaive"] = f"{100 * meaning / naive:.0f}"  # content effect as % of naive ASR
                 md += ["## Matched controls: ASR decomposition on the frozen tape", "",
                        "Each column adds one ingredient of the attack to the treated pool (same seed, same tape). "
                        "Meaning = frozen attack − (count-matched placebo + bias).", "", dec_md, "",
@@ -338,17 +372,12 @@ def main() -> None:
                     md.append(f"| {k} | {v['minor']:.2f} | {v['news_style']:.2f} | {v['academic_style']:.2f} |")
             md.append("")
             rows = [(k, v) for k, v in m["per_type_detection_rate"].items() if isinstance(v, dict)]
-            tex = ["\\begin{table}[t]", "\\centering", "\\caption{Detection rate of the proxy detector by perturbation type, before and after style rewriting (threshold at 10\\% clean FPR).}", "\\label{tab:detector}", "\\small", "\\begin{tabular}{lrrr}", "\\toprule", "Type & Minor & +News & +Academic \\\\", "\\midrule"]
-            tex += [f"{k.replace('_', ' ')} & {v['minor']:.2f} & {v['news_style']:.2f} & {v['academic_style']:.2f} \\\\" for k, v in rows]
+            tex = ["\\begin{table}[t]", "\\centering",
+                   f"\\caption{{Detection rate of the proxy detector by edit type, for the minor edit alone and after each style rewrite (threshold set at {100*m['target_fpr']:.0f}\\% false positives on clean text).}}",
+                   "\\label{tab:detector}", "\\footnotesize", "\\begin{tabular}{lrrr}", "\\toprule", "Edit type & Minor edit & + news rewrite & + academic rewrite \\\\", "\\midrule"]
+            tex += [f"{EDIT_TYPE_NAMES.get(k, k.replace('_', ' '))} & {v['minor']:.2f} & {v['news_style']:.2f} & {v['academic_style']:.2f} \\\\" for k, v in rows]
             tex += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
             (tex_dir / "detector.tex").write_text("\n".join(tex))
-
-    # figures referenced by paper/main.tex
-    fig_dir = ensure_dir(ROOT / "paper" / "figures")
-    for fig in PAPER_FIGURES:
-        src = root / "pipeline" / fig
-        if src.exists():
-            shutil.copyfile(src, fig_dir / fig)
 
     emit_numbers(aggs, extra, tex_dir / "numbers.tex")
     (root / "report.md").write_text("\n".join(md), encoding="utf-8")

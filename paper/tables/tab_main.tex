@@ -1,0 +1,16 @@
+\begin{table*}[t]
+\centering
+\caption{Main results over \val{NseedsRun} paired seeds (\%). Net ASR $=$ ASR $-$ ASR of the paraphrase placebo, with 95\% bootstrap CIs. \emph{Adaptive}: MisGen's feedback loop runs against the defended agent. \emph{Frozen}: the attack recorded against the undefended agent is replayed verbatim. Clean return is the paired clean agent's cumulative return over the 60-day window; drawdown is the attacked agent's maximum drawdown.}
+\label{tab:main}
+\small
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Defence & MER & ASR & Placebo ASR & Net ASR (adaptive) & Net ASR (frozen) & Clean return & Drawdown \\
+\midrule
+No defence & 62.1 & 39.3 & 20.9 & 18.4 [16.6, 20.1] & 18.4 [16.6, 20.1] & +6.6 & $-$4.8 \\
+Grounding & 59.5 & 21.6 & 14.2 & 7.4 [6.2, 8.6] & 8.4 [7.1, 9.7] & +2.9 & $-$5.9 \\
+Grounding + risk & 59.5 & 26.8 & 17.5 & 9.3 [7.8, 10.9] & 9.0 [7.6, 10.4] & +2.2 & $-$5.6 \\
+\bottomrule
+\end{tabular}
+\end{table*}

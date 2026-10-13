@@ -33,8 +33,10 @@ pipeline:
 ablation:
 	$(PY) scripts/run_ablation.py --config configs/default.yaml
 
+# report.md + paper tables/macros, then the paper's vector figures
 report:
 	$(PY) scripts/make_report_tables.py
+	$(PY) scripts/make_paper_figures.py
 
 # Animated showcase: writes frontend/data.js, then open frontend/index.html in a browser (works offline)
 frontend:
