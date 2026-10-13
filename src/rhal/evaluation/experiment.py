@@ -23,7 +23,8 @@ Matched placebo controls (built from the same tape, so exact for the frozen sett
   * placebo_bias    -- placebo_matched plus the attack's daily bias contexts.
 All placebo variants share one paraphrase stream per (day, item), so a matched pool
 is a subset of the classic placebo pool. This splits ASR into pool noise, count,
-bias and meaning: meaning = ASR(frozen) - ASR(placebo_bias).
+bias and meaning: meaning = ASR(frozen) - ASR(placebo_bias). Because the controls copy
+one tape, ASR_net_matched is only reported for arms that face it (frozen__*, injected__none).
 
 One-step counterfactual ASR (experiment.counterfactual_asr): after the first flip the
 treated agent's portfolio and memory drift from the shadow's, so later flips can come
@@ -150,11 +151,15 @@ class Simulation:
         self.t1 = n - 1  # decisions at t in [t0, t1), executed at t+1 <= n-1
         if self.t0 < 100:
             raise ValueError(f"not enough history: n_days={n}, eval_days={cfg.data.eval_days} (need >=100 warmup)")
+        # Text models (retrieval TF-IDF, attacker similarity filter) are fit ONLY on news dated before
+        # the evaluation window. Fitting on the whole corpus let future articles' vocabulary/IDF move
+        # earlier decisions -- lookahead through text (tests/test_text_nolookahead.py).
+        self.text_background = dataset.news.loc[dataset.news["date"].astype(str) < dataset.dates[self.t0], "text"].tolist()
 
     # -- builders ----------------------------------------------------------
     def _agent(self, cfg: Config, spec: RunSpec) -> TradingAgent:
         zc = ["z_" + c for c in feature_columns(spec.micro)]
-        retr = Retriever(cfg.retrieval.method, cfg.retrieval.top_k, cfg.retrieval.recency_days, cfg.retrieval.recency_decay, background=self.ds.news["text"].tolist())
+        retr = Retriever(cfg.retrieval.method, cfg.retrieval.top_k, cfg.retrieval.recency_days, cfg.retrieval.recency_decay, background=self.text_background)
         perc = Perceiver(self.ds.feats, retr, self.ds.dates)
         ev = EvidenceBuilder(self.ds.feats, zc, micro=spec.micro, window=cfg.grounding.window, horizon=cfg.grounding.horizon, top_k=cfg.grounding.top_k) if spec.grounded else None
         if cfg.agent.mode == "rule":
@@ -179,7 +184,7 @@ class Simulation:
         # Every placebo variant uses the "placebo" key, so the same (day, item) gets the same paraphrase.
         key = "misgen" if spec.injection == "misgen" else "placebo"
         return MisGenEngine(
-            seed=child_seed(self.seed, "misgen", key), background_corpus=self.ds.news["text"].tolist(), detector=self.det,
+            seed=child_seed(self.seed, "misgen", key), background_corpus=self.text_background, detector=self.det,
             bias_prob=m.bias_prob, use_bias=m.use_bias, use_minor=m.use_minor, use_rewrite=m.use_rewrite, use_filter=m.use_filter,
             use_feedback=m.use_feedback, alpha=m.alpha, delta=m.delta, max_tries=m.max_tries, tau_sim=m.sim_threshold, tau_det=m.det_threshold,
             injection_ratio=1.0 if matched else m.injection_ratio,  # matched: paraphrase exactly the tape's items
@@ -312,15 +317,31 @@ NET_COLUMNS = {
     "ASR_net_matched": ("ASR", "placebo_bias__"),  # meaning only: same items, count and bias as the attack
     "ASR_cf_net_matched": ("ASR_cf", "placebo_bias__"),
 }
+# Partners built from the TAPE_SOURCE_ARM tape: they are matched controls only for arms that face that tape.
+TAPE_PARTNER_PREFIXES = ("placebo_matched__", "placebo_bias__")
+
+
+def faces_tape(arm: str) -> bool:
+    """True if the arm's attack is exactly the recorded tape: every frozen arm and the arm the tape came from.
+
+    An adaptive attack on a defended agent (injected__grounded, ...) learns its own strategy mix, so it
+    injects other items and bias types than the tape; a tape-matched placebo is not its matched control.
+    """
+    return arm.startswith("frozen__") or arm == TAPE_SOURCE_ARM
 
 
 def attach_net_asr(rows: list[dict]) -> list[dict]:
-    """Add the NET_COLUMNS per (seed, defence) onto injected and frozen rows; NaN elsewhere or if a partner is missing."""
+    """Add the NET_COLUMNS per (seed, defence) onto injected and frozen rows; NaN elsewhere or if a partner is missing.
+
+    The tape-matched columns (``*_net_matched``) are only filled for arms that face the tape (see ``faces_tape``).
+    """
     by = {(r["seed"], r["arm"]): r for r in rows}
     for r in rows:
         prefix = next((p for p in TREATED_PREFIXES if r["arm"].startswith(p)), None)
         for col, (metric, partner_prefix) in NET_COLUMNS.items():
-            partner = by.get((r["seed"], partner_prefix + r["arm"][len(prefix):])) if prefix is not None else None
+            partner = None
+            if prefix is not None and (partner_prefix not in TAPE_PARTNER_PREFIXES or faces_tape(r["arm"])):
+                partner = by.get((r["seed"], partner_prefix + r["arm"][len(prefix):]))
             if partner is not None and metric in r and metric in partner:
                 r[col] = r[metric] - partner[metric]
             else:

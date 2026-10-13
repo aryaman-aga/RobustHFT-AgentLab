@@ -1,19 +1,31 @@
 # paper/
 
+Conference manuscript **"RobustHFT-AgentLab: A Defense Layer Against Misinformation Attacks on LLM-Based Trading Agents"** by Aryaman Agarwal, Arusha Habib and Ayana Kumar (NSUT, New Delhi). IEEEtran conference format, 8 pages including references and a statistical appendix. The defense layer (evidence model, temporal grounding, risk layer) is the main contribution; placebo controls are the measurement tool that credits it only for misinformation-driven flips.
+
 | File | What it is |
 |---|---|
-| `main.tex` | Conference manuscript (IEEEtran). Every number in the prose comes from `\val{...}` macros defined in `tables/numbers.tex`, so it always matches the latest run. |
-| `tables/*.tex` | **Generated** by `scripts/make_report_tables.py` from `outputs/`. Never hand-edit. |
-| `figures/*.png` | **Generated**: copied from `outputs/pipeline/` by the same script, so `paper/` compiles from a fresh clone. |
-| `references.bib` | Bibliography shared by both drafts. |
-| `ieee_paper.tex` | Earlier standalone draft with **hand-typed** tables. Its numbers predate the current outputs and do not match them; it should be merged into `main.tex` (or regenerated) before submission. |
+| `main.tex` | The manuscript. Every number in the prose comes from generated `\val{...}` macros, so it always matches the latest run. |
+| `references.bib` | Bibliography. Every entry was checked against the publisher, the ACL Anthology, NeurIPS proceedings, arXiv or the DOI registry (Oct 2026). Acronyms are brace-protected because IEEEtran sentence-cases titles; an `IEEEtranBSTCTL` entry switches on "first author et al." for more than six authors. |
+| `figures/fig_harness.tex` | TikZ diagram of the defense layer and the paired harness (Fig. 1), drawn at its natural size so its fonts match the caption. Algorithm 1 is written directly in `main.tex`. |
+| `figures/fig_*.pdf` | **Generated** vector figures (Figs. 2--5: frontier, replay, defense components, ASR decomposition) from `scripts/make_paper_figures.py`. |
+| `tables/numbers.tex`, `tables/stats_*.tex`, `tables/detector.tex` | **Generated** by `scripts/make_report_tables.py` from `outputs/`. |
+| `tables/tab_main.tex`, `tables/figmacros.tex` | **Generated** by `scripts/make_paper_figures.py` (Table I and numbers that only the figures compute). |
+| `tables/main_results.tex`, `tables/ablation_*.tex`, `tables/asr_decomposition.tex` | **Generated** mean ± sd tables. `main.tex` does not use them; they are kept for the BTP reports. |
 
-Build: `make paper` from the repo root (uses `tectonic` if installed, else `pdflatex` + `bibtex`). PDFs are build products and are git-ignored.
+Never hand-edit a generated file: change the script and run `make report`.
 
-Refresh numbers after new experiments: `make pipeline ablation report`, then `make paper`.
+## Build
 
-## Status (30-seed re-run, Oct 2026)
+`make paper` from the repo root (uses `tectonic` if installed, else `pdflatex` + `bibtex`). The preamble detects the engine: TeX Gyre Termes through fontspec under XeTeX/LuaTeX, newtx under pdfLaTeX, so the same source builds on a submission server. A clean build has no overfull boxes, no undefined citations and no `rhal: missing generated value` warnings; check `main.log` for all three. PDFs are build products and are git-ignored.
 
-The prose of `main.tex` has been rewritten against the paired tests in `tables/stats_main.tex` / `tables/stats_ablation.tex`. The placebo/net-ASR finding and the grounding gain hold in both attack settings. The microstructure, risk-layer (net ASR, active flips, drawdown), style-rewrite and κ effects show no detectable difference and are reported as such.
+Refresh everything after new experiments: `make pipeline ablation report`, then `make paper`.
 
-Paired comparisons are cited with three helpers defined in the preamble of `main.tex`, all of which expand to the generated `\val{Cmp<Key>}` / `Lo` / `Hi` / `P` macros: `\cmp{CmpKey}` → "8.8 pp [6.1, 11.6]", `\ci{CmpKey}` → "[6.1, 11.6]", `\pholm{CmpKey}` → "p_Holm = 0.041" or "p_Holm < 0.001". A difference is called detectable only if its CI excludes zero **and** p_Holm < 0.05.
+## Anonymous vs camera-ready
+
+`main.tex` currently prints the authors (`\anonymousfalse`); the e-mail line still reads "TBD". For a double-blind venue set `\anonymoustrue`: it prints "Anonymous Authors" and hides the repository URL. The Reproducibility section points to the GitHub repository, which is private: make it public (or upload an anonymized copy) before submitting.
+
+## Status (100 seeds, leak-free re-run, Oct 2026)
+
+All results come from 100 paired seeds, re-run after the text-lookahead and hash-order fixes. Every claim in the prose is a paired comparison listed in `scripts/make_report_tables.py` and reported in the appendix tables. The placebo ladder, the grounding gain (in both attack settings) and the hold-on-conflict penalty are detectable. Microstructure proxies, the risk layer's drawdown benefit and most κ steps are not, and the text says "no detectable difference" for them.
+
+Paired comparisons are cited with helpers defined in the preamble of `main.tex`, all of which expand to the generated `\val{Cmp<Key>}` / `Lo` / `Hi` / `P` macros: `\cmp{CmpKey}` → "11.0 pp [9.1, 12.9]", `\ci{CmpKey}` → "[9.1, 12.9]", `\cmpneg{CmpKey}` → the same with the sign flipped, `\pholm{CmpKey}` → "p_Holm = 0.006" or "p_Holm < 0.001". A difference is called detectable only if its CI excludes zero **and** p_Holm < 0.05. A missing macro prints a red dash and a `rhal: missing generated value` warning instead of failing silently.

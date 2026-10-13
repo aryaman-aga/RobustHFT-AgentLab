@@ -9,52 +9,52 @@
 Comparison & $\Delta$ (pp) & 95\% CI & $p_{\mathrm{Holm}}$ \\
 \midrule
 \multicolumn{4}{l}{\textit{Attack components (net ASR)}} \\
-net ASR: full $-$ wo\_bias & +1.8 & [-0.7, +4.3] & 0.543 \\
-net ASR: full $-$ wo\_feedback & +1.2 & [-1.4, +3.9] & 0.872 \\
-net ASR: full $-$ wo\_filtering & +6.2 & [+3.4, +9.0] & \textbf{$<$0.001} \\
-net ASR: full $-$ wo\_minor & +8.3 & [+5.6, +11.0] & \textbf{$<$0.001} \\
-net ASR: full $-$ wo\_rewrite & -0.4 & [-4.4, +3.4] & 0.872 \\
+net ASR: full attack $-$ w/o bias prompts & +2.0 & [+1.0, +3.0] & \textbf{$<$0.001} \\
+net ASR: full attack $-$ w/o feedback & +1.4 & [$-$0.1, +3.0] & 0.175 \\
+net ASR: full attack $-$ w/o filtering & +5.4 & [+3.6, +7.2] & \textbf{$<$0.001} \\
+net ASR: full attack $-$ w/o minor edits & +9.5 & [+8.0, +11.1] & \textbf{$<$0.001} \\
+net ASR: full attack $-$ w/o rewriting & $-$1.6 & [$-$3.8, +0.6] & 0.175 \\
 \midrule
 \multicolumn{4}{l}{\textit{Attack components (MER)}} \\
-MER: full $-$ wo\_bias & +0.0 & [-0.6, +0.7] & 1.000 \\
-MER: full $-$ wo\_feedback & +4.6 & [+3.3, +5.8] & \textbf{$<$0.001} \\
-MER: full $-$ wo\_filtering & +10.5 & [+8.8, +12.3] & \textbf{$<$0.001} \\
-MER: full $-$ wo\_minor & +0.2 & [-1.4, +1.9] & 1.000 \\
-MER: full $-$ wo\_rewrite & +14.8 & [+13.2, +16.4] & \textbf{$<$0.001} \\
+MER: full attack $-$ w/o bias prompts & $-$0.2 & [$-$0.8, +0.3] & 0.751 \\
+MER: full attack $-$ w/o feedback & +4.0 & [+3.2, +4.7] & \textbf{$<$0.001} \\
+MER: full attack $-$ w/o filtering & +9.9 & [+9.1, +10.8] & \textbf{$<$0.001} \\
+MER: full attack $-$ w/o minor edits & $-$0.4 & [$-$1.2, +0.5] & 0.751 \\
+MER: full attack $-$ w/o rewriting & +13.6 & [+12.8, +14.5] & \textbf{$<$0.001} \\
 \midrule
-\multicolumn{4}{l}{\textit{Defence components, adaptive attack (net ASR)}} \\
-grounding\_only $-$ grounding\_micro & +0.4 & [-2.1, +3.2] & 0.788 \\
-none $-$ grounding\_only & +8.3 & [+5.9, +10.7] & \textbf{$<$0.001} \\
-none $-$ risk\_only & +3.6 & [+1.2, +5.9] & \textbf{0.041} \\
-grounding\_micro $-$ full\_defense & -1.6 & [-4.1, +0.7] & 0.615 \\
-wo\_hold\_on\_conflict $-$ full\_defense & -1.7 & [-4.2, +0.6] & 0.615 \\
+\multicolumn{4}{l}{\textit{Defense components, adaptive attack (net ASR)}} \\
+price-only grounding $-$ grounding + micro & +0.8 & [$-$0.8, +2.2] & 0.346 \\
+no defense $-$ price-only grounding & +10.2 & [+8.5, +12.0] & \textbf{$<$0.001} \\
+no defense $-$ risk only & +2.4 & [+0.8, +4.1] & \textbf{0.014} \\
+grounding + micro $-$ full defense & $-$1.9 & [$-$3.2, $-$0.6] & \textbf{0.016} \\
+w/o hold-on-conflict $-$ full defense & $-$1.9 & [$-$3.3, $-$0.6] & \textbf{0.016} \\
 \midrule
-\multicolumn{4}{l}{\textit{Defence components, frozen attack (net ASR)}} \\
-grounding\_only $-$ grounding\_micro & +1.2 & [-1.3, +3.6] & 0.576 \\
-none $-$ grounding\_only & +6.7 & [+4.3, +9.0] & \textbf{$<$0.001} \\
-none $-$ risk\_only & +1.9 & [+0.4, +3.4] & 0.083 \\
-grounding\_micro $-$ full\_defense & -0.9 & [-2.4, +0.4] & 0.576 \\
-wo\_hold\_on\_conflict $-$ full\_defense & -1.1 & [-2.5, +0.3] & 0.576 \\
+\multicolumn{4}{l}{\textit{Defense components, frozen attack (net ASR)}} \\
+price-only grounding $-$ grounding + micro & +0.6 & [$-$0.7, +2.0] & 0.473 \\
+no defense $-$ price-only grounding & +9.4 & [+7.7, +11.0] & \textbf{$<$0.001} \\
+no defense $-$ risk only & +2.5 & [+1.5, +3.5] & \textbf{$<$0.001} \\
+grounding + micro $-$ full defense & $-$0.6 & [$-$1.5, +0.2] & 0.473 \\
+w/o hold-on-conflict $-$ full defense & $-$0.6 & [$-$1.5, +0.3] & 0.473 \\
 \midrule
 \multicolumn{4}{l}{\textit{Retrieval breadth (net ASR)}} \\
-net ASR: k2 $-$ k4 & +2.6 & [-0.4, +5.8] & 0.247 \\
-net ASR: k8 $-$ k4 & +0.8 & [-2.6, +4.2] & 0.689 \\
+net ASR: $k{=}2$ $-$ $k{=}4$ & +2.7 & [+0.5, +4.9] & \textbf{0.041} \\
+net ASR: $k{=}8$ $-$ $k{=}4$ & $-$0.2 & [$-$2.1, +1.9] & 0.873 \\
 \midrule
 \multicolumn{4}{l}{\textit{Retrieval breadth (placebo ASR)}} \\
-placebo ASR: k2 $-$ k4 & +0.9 & [-1.7, +3.6] & 0.547 \\
-placebo ASR: k8 $-$ k4 & -4.5 & [-6.6, -2.5] & \textbf{$<$0.001} \\
+placebo ASR: $k{=}2$ $-$ $k{=}4$ & +1.7 & [+0.3, +3.0] & \textbf{0.020} \\
+placebo ASR: $k{=}8$ $-$ $k{=}4$ & $-$4.1 & [$-$5.5, $-$2.8] & \textbf{$<$0.001} \\
 \midrule
 \multicolumn{4}{l}{\textit{Grounding strength, adaptive attack (net ASR)}} \\
-$\kappa$ 0.3 $-$ 0.7 & +1.0 & [-0.6, +2.4] & 0.465 \\
-$\kappa$ 0.7 $-$ 1.0 & +0.8 & [-0.9, +2.7] & 0.465 \\
+$\kappa{=}0.3$ $-$ $\kappa{=}0.7$ & +0.9 & [$-$0.3, +2.1] & 0.129 \\
+$\kappa{=}0.7$ $-$ $\kappa{=}1.0$ & +1.8 & [+0.7, +3.0] & \textbf{0.006} \\
 \midrule
 \multicolumn{4}{l}{\textit{Grounding strength, frozen attack (net ASR)}} \\
-$\kappa$ 0.3 $-$ 0.7 & +0.5 & [-0.9, +1.9] & 1.000 \\
-$\kappa$ 0.7 $-$ 1.0 & -0.4 & [-1.4, +0.7] & 1.000 \\
+$\kappa{=}0.3$ $-$ $\kappa{=}0.7$ & +0.2 & [$-$0.6, +0.9] & 0.704 \\
+$\kappa{=}0.7$ $-$ $\kappa{=}1.0$ & +0.4 & [$-$0.3, +1.0] & 0.592 \\
 \midrule
 \multicolumn{4}{l}{\textit{Grounding strength (clean CR)}} \\
-$\kappa$ 0.3 $-$ 0.7 & +0.3 & [-0.1, +0.6] & 0.294 \\
-$\kappa$ 0.7 $-$ 1.0 & +0.4 & [-0.1, +1.1] & 0.294 \\
+$\kappa{=}0.3$ $-$ $\kappa{=}0.7$ & +0.3 & [+0.0, +0.7] & \textbf{0.049} \\
+$\kappa{=}0.7$ $-$ $\kappa{=}1.0$ & +0.3 & [+0.1, +0.6] & \textbf{0.049} \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}

@@ -1,7 +1,11 @@
 """Matched placebo controls (count- and bias-matched to an attack tape) and the one-step counterfactual ASR."""
+import numpy as np
+import pandas as pd
 import pytest
 
-from rhal.evaluation.experiment import RunSpec, Simulation
+from rhal.evaluation.experiment import TAPE_INJECTIONS, Dataset, RunSpec, Simulation
+from rhal.evaluation.metrics import attack_metrics
+from rhal.features import build_feature_frame
 from rhal.memory import NewsPool
 
 
@@ -51,11 +55,47 @@ def test_tape_required_for_matched_placebos(sim):
             sim.run(RunSpec(inj, inj))
 
 
-def test_counterfactual_equals_treated_on_day_one_and_is_zero_for_clean(sim, source):
-    first = source.treated_steps[0]
-    assert first["cf_action"] == first["action"]  # day one: same memory, same portfolio, same text
+@pytest.mark.parametrize("injection, grounded, risk", [("misgen", False, False), ("misgen", True, True), ("replay", True, False), ("placebo", True, True),
+                                                       ("placebo_matched", False, False), ("placebo_bias", True, True)])
+def test_counterfactual_asr_equals_asr_on_day_one(sim, source, injection, grounded, risk):
+    """Day one: the throw-away agent holds what the treated agent holds (empty memory, initial cash) and reads the same pool and bias."""
+    r = sim.run(RunSpec("x", injection, grounded, risk, grounded), tape=source.tape if injection in TAPE_INJECTIONS else None)
+    assert r.treated_steps[0]["cf_action"] == r.treated_steps[0]["action"]
+    day_one = attack_metrics(r.treated_steps[:1], r.shadow_steps[:1])
+    assert day_one["ASR_cf"] == day_one["ASR"]
+
+
+def test_counterfactual_is_zero_for_clean(sim):
     clean = sim.run(RunSpec("clean__none", "none"))
     assert clean.metrics["ASR_cf"] == 0.0 and clean.metrics["ASR"] == 0.0
+
+
+def _mutate_future(ds: Dataset, cfg, cut: int) -> Dataset:
+    """Copy of ``ds`` whose prices and volumes change from row ``cut`` on (news untouched); features rebuilt as in prepare_dataset."""
+    prices = ds.prices.copy()
+    cols = ["open", "high", "low", "close"]
+    ramp = pd.Series(np.linspace(0.6, 1.8, len(prices) - cut), index=prices.index[cut:])
+    prices.loc[cut:, cols] = prices.loc[cut:, cols].mul(ramp, axis=0)
+    prices.loc[cut:, "volume"] *= 50.0
+    f = cfg.features
+    feats = build_feature_frame(prices, ds.intraday, vol_window=f.vol_window, drawdown_window=f.drawdown_window, short_trend=f.short_trend,
+                                long_trend=f.long_trend, anomaly_window=f.anomaly_window, micro=True, rv_window=f.micro.rv_window,
+                                volume_window=f.micro.volume_window)
+    feats["close"] = prices["close"].to_numpy()
+    return Dataset(prices, ds.news, ds.intraday, feats, ds.dates)
+
+
+def test_counterfactual_does_not_depend_on_future(sim, small_cfg, detector):
+    """Mutate every price row from the middle of the evaluation window on: no decision before it may move."""
+    cut = (sim.t0 + sim.t1) // 2
+    mutated = Simulation(small_cfg, _mutate_future(sim.ds, small_cfg, cut), detector, 42)
+    spec = RunSpec("g", "misgen", True, True, True)
+    a, b = sim.run(spec), mutated.run(spec)
+    k = cut - sim.t0  # steps 0..k-1 are decided at t < cut
+    for key in ("action", "cf_action", "raw_signal"):
+        assert [s[key] for s in a.treated_steps[:k]] == [s[key] for s in b.treated_steps[:k]]
+    assert [s["action"] for s in a.shadow_steps[:k]] == [s["action"] for s in b.shadow_steps[:k]]
+    assert [s["raw_signal"] for s in a.treated_steps[k:]] != [s["raw_signal"] for s in b.treated_steps[k:]]  # the mutation was seen
 
 
 def test_counterfactual_does_not_change_any_other_result(sim, source, small_cfg, small_dataset, detector):
@@ -66,7 +106,13 @@ def test_counterfactual_does_not_change_any_other_result(sim, source, small_cfg,
     assert [s["action"] for s in source.treated_steps] == [s["action"] for s in r_off.treated_steps]
 
 
-def test_new_arms_are_deterministic(sim, source):
-    a = sim.run(RunSpec("placebo_bias__grounded", "placebo_bias", True, False, True), tape=source.tape)
-    b = sim.run(RunSpec("placebo_bias__grounded", "placebo_bias", True, False, True), tape=source.tape)
-    assert a.metrics == b.metrics
+def test_new_arms_are_deterministic(small_cfg, small_dataset, detector):
+    """Two fresh simulations, each recording its own tape, give identical matched controls and counterfactual actions."""
+    def run_controls():
+        s = Simulation(small_cfg, small_dataset, detector, 42)
+        tape = s.run(RunSpec("injected__none", "misgen")).tape
+        return [s.run(RunSpec(inj, inj, True, False, True), tape=tape) for inj in ("placebo_matched", "placebo_bias", "replay")]
+
+    for a, b in zip(run_controls(), run_controls()):
+        assert a.metrics == b.metrics
+        assert [s["cf_action"] for s in a.treated_steps] == [s["cf_action"] for s in b.treated_steps]
