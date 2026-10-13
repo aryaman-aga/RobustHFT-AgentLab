@@ -41,7 +41,7 @@ def main_comparisons() -> list[Comparison]:
     for d in ("none", "grounded", "grounded_risk"):
         out.append(C(f"actnet_{d}", fam, f"net active ASR, adaptive, {d}", "ASR_active", f"injected__{d}", f"placebo__{d}"))
     for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
-        fam = f"Defence gain, {setting} attack"
+        fam = f"Defense gain, {setting} attack"
         for d in ("grounded", "grounded_risk"):
             out.append(C(f"gain_{setting}_{d}_asr", fam, f"ASR: none $-$ {d}", "ASR", f"{pre}__none", f"{pre}__{d}"))
             out.append(C(f"gain_{setting}_{d}_net", fam, f"net ASR: none $-$ {d}", "ASR_net", f"{pre}__none", f"{pre}__{d}"))
@@ -77,7 +77,7 @@ def control_comparisons() -> list[Comparison]:
         out.append(C(f"cf_net_{d}", fam, f"net cf-ASR, adaptive, {d}", "ASR_cf", f"injected__{d}", f"placebo__{d}"))
     for d in LEVELS:  # the cleanest single-day meaning effect: same items, count, bias and state as the clean agent
         out.append(C(f"cf_meaning_{d}", fam, f"matched net cf-ASR, frozen, {d}", "ASR_cf", f"frozen__{d}", f"placebo_bias__{d}"))
-    fam = "Defence gain on matched net cf-ASR (frozen)"
+    fam = "Defense gain on matched net cf-ASR (frozen)"
     for d in ("grounded", "grounded_risk"):
         out.append(C(f"cf_gain_{d}", fam, f"matched net cf-ASR: none $-$ {d}", "ASR_cf_net_matched", "frozen__none", f"frozen__{d}"))
     return out
@@ -93,7 +93,7 @@ def decomposition_tables(full: pd.DataFrame, st: pd.DataFrame) -> tuple[str, str
            "paraphrases of every item (classic placebo), paraphrases of only the attacked items, plus the attack's bias contexts, and finally the "
            "misinformation itself. Meaning $=$ frozen $-$ (count-matched $+$ bias), with its 95\\% bootstrap CI.}",
            "\\label{tab:decomposition}", "\\small", FIT_BEGIN, "\\begin{tabular}{lrrrrr}", "\\toprule",
-           "Defence & Placebo & Matched & $+$Bias & Attack & Meaning \\\\", "\\midrule"]
+           "Defense & Placebo & Matched & $+$Bias & Attack & Meaning \\\\", "\\midrule"]
     for d in LEVELS:
         arms = [f"placebo__{d}", f"placebo_matched__{d}", f"placebo_bias__{d}", f"frozen__{d}"]
         if not all(a in mean.index for a in arms) or f"dec_meaning_{d}" not in by_key.index:
@@ -118,7 +118,7 @@ def ablation_comparisons(group: str) -> list[Comparison]:
                  ("risk_on_top", "grounding_micro", "full_defense"), ("hold", "wo_hold_on_conflict", "full_defense")]
         for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
             for key, a, b in pairs:
-                out.append(C(f"abl_def_{setting}_{key}", f"Defence components, {setting} attack (net ASR)", f"{a} $-$ {b}", "ASR_net", f"{pre}__{a}", f"{pre}__{b}"))
+                out.append(C(f"abl_def_{setting}_{key}", f"Defense components, {setting} attack (net ASR)", f"{a} $-$ {b}", "ASR_net", f"{pre}__{a}", f"{pre}__{b}"))
     elif group == "grounding_strength":  # positive = larger kappa lowers net ASR / costs clean return
         for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
             for lo, hi in (("0.3", "0.7"), ("0.7", "1.0")):
@@ -147,10 +147,10 @@ def stats_markdown(st: pd.DataFrame) -> str:
 # arm identifiers in comparison labels -> words, for the paper's appendix tables (order matters)
 PRETTY = [(r"\bplacebo_matched\b", "count-matched placebo"), (r"\bplacebo_bias\b", "bias-matched placebo"),
           (r"\bgrounded_risk\b", "grounding + risk"), (r"\bgrounding_micro\b", "grounding + micro"),
-          (r"\bgrounding_only\b", "price-only grounding"), (r"\bfull_defense\b", "full defence"), (r"\brisk_only\b", "risk only"),
+          (r"\bgrounding_only\b", "price-only grounding"), (r"\bfull_defense\b", "full defense"), (r"\brisk_only\b", "risk only"),
           (r"\bwo_hold_on_conflict\b", "w/o hold-on-conflict"), (r"\bwo_minor\b", "w/o minor edits"), (r"\bwo_filtering\b", "w/o filtering"),
           (r"\bwo_bias\b", "w/o bias prompts"), (r"\bwo_feedback\b", "w/o feedback"), (r"\bwo_rewrite\b", "w/o rewriting"),
-          (r"\bfull\b", "full attack"), (r"\bnone\b", "no defence"), (r"\bgrounded\b", "grounding"), (r"\bfrozen \$-\$", "frozen attack $-$"),
+          (r"\bfull\b(?! defense)", "full attack"), (r"\bnone\b", "no defense"), (r"\bgrounded\b", "grounding"), (r"\bfrozen \$-\$", "frozen attack $-$"),
           (r"\bk([248])\b", r"$k{=}\1$"), (r"\$\\kappa\$ ([0-9.]+) \$-\$ ([0-9.]+)", r"$\\kappa{=}\1$ $-$ $\\kappa{=}\2$")]
 
 

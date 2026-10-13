@@ -1,11 +1,11 @@
 % Fig. 1 -- paired red-teaming harness (TikZ). Drawn on an explicit mm grid at the natural
 % IEEE text width (~178 mm), so it is NOT rescaled and its fonts match the caption.
-% Needs tikz libraries: arrows.meta, fit, backgrounds, calc; colours `attack` and `defence`.
+% Needs tikz libraries: arrows.meta, fit, backgrounds, calc; colours `attack` and `defense`.
 \begin{tikzpicture}[
     font=\footnotesize, >={Stealth[length=3.4pt,width=3pt]},
     box/.style={draw=black!55, rounded corners=2pt, fill=white, align=center, minimum height=10mm, inner sep=1.5pt, text width=#1},
     att/.style={box=#1, draw=attack, fill=attack!7, line width=0.75pt},
-    dfn/.style={box=#1, draw=defence, fill=defence!8},
+    dfn/.style={box=#1, draw=defense, fill=defense!8},
     sub/.style={font=\scriptsize, text=black!62},
     flow/.style={->, draw=black!62, line width=0.55pt},
     aflow/.style={->, draw=attack, line width=0.8pt},
@@ -47,11 +47,11 @@
 % Polya-urn feedback: strategies retrieved on flipped days are reinforced
 \draw[aflow, dashed, rounded corners=3pt] (cmp.east) -- ++(2.5mm,0) |- (32mm,10.5mm)
     node[pos=0.75, above=-0.5pt, sub, text=attack] {feedback: strategies retrieved on flipped days are reinforced (P\'olya urn)} -- (misgen.north);
-% ---- lane labels and defence band ----------------------------------------------------------
+% ---- lane labels and defense band ----------------------------------------------------------
 \node[lane] at (0.5mm,7.4mm) {ATTACKED AGENT};
 \node[lane] at (10.5mm,-26.6mm) {CLEAN TWIN (CONTROL)};  % right of the `same items' arrow
 \begin{scope}[on background layer]
-  \node[draw=defence!55, dashed, rounded corners=4pt, fill=defence!3, inner sep=2mm, fit=(gA) (rA) (ev) (gB) (rB)] (band) {};
+  \node[draw=defense!55, dashed, rounded corners=4pt, fill=defense!3, inner sep=2mm, fit=(gA) (rA) (ev) (gB) (rB)] (band) {};
 \end{scope}
-\node[sub, text=defence, anchor=north, inner sep=1.5pt] at (band.south) {defences (each one ablated)};
+\node[sub, text=defense, anchor=north, inner sep=1.5pt] at (band.south) {\textbf{RobustHFT defense layer} (each component ablated)};
 \end{tikzpicture}

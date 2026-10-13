@@ -1,13 +1,13 @@
 # paper/
 
-Conference manuscript **"Separating Meaning from Noise: Placebo-Controlled Red-Teaming of LLM Trading Agents"** (IEEEtran conference format; 8 pages including references and a statistical appendix).
+Conference manuscript **"RobustHFT-AgentLab: A Defense Layer Against Misinformation Attacks on LLM-Based Trading Agents"** by Aryaman Agarwal, Arusha Habib and Ayana Kumar (NSUT, New Delhi). IEEEtran conference format, 8 pages including references and a statistical appendix. The defense layer (evidence model, temporal grounding, risk layer) is the main contribution; placebo controls are the measurement tool that credits it only for misinformation-driven flips.
 
 | File | What it is |
 |---|---|
 | `main.tex` | The manuscript. Every number in the prose comes from generated `\val{...}` macros, so it always matches the latest run. |
 | `references.bib` | Bibliography. Every entry was checked against the publisher, the ACL Anthology, NeurIPS proceedings, arXiv or the DOI registry (Oct 2026). Acronyms are brace-protected because IEEEtran sentence-cases titles; an `IEEEtranBSTCTL` entry switches on "first author et al." for more than six authors. |
-| `figures/fig_harness.tex`, `figures/fig_controls.tex` | TikZ diagrams (Fig. 1 harness, Fig. 2 control ladder), drawn at their natural size so their fonts match the captions. |
-| `figures/fig_*.pdf` | **Generated** vector figures (Figs. 3--6) from `scripts/make_paper_figures.py`. |
+| `figures/fig_harness.tex` | TikZ diagram of the defense layer and the paired harness (Fig. 1), drawn at its natural size so its fonts match the caption. Algorithm 1 is written directly in `main.tex`. |
+| `figures/fig_*.pdf` | **Generated** vector figures (Figs. 2--5: frontier, replay, defense components, ASR decomposition) from `scripts/make_paper_figures.py`. |
 | `tables/numbers.tex`, `tables/stats_*.tex`, `tables/detector.tex` | **Generated** by `scripts/make_report_tables.py` from `outputs/`. |
 | `tables/tab_main.tex`, `tables/figmacros.tex` | **Generated** by `scripts/make_paper_figures.py` (Table I and numbers that only the figures compute). |
 | `tables/main_results.tex`, `tables/ablation_*.tex`, `tables/asr_decomposition.tex` | **Generated** mean ± sd tables. `main.tex` does not use them; they are kept for the BTP reports. |
@@ -22,7 +22,7 @@ Refresh everything after new experiments: `make pipeline ablation report`, then 
 
 ## Anonymous vs camera-ready
 
-`\anonymoustrue` near the top of `main.tex` prints "Anonymous Authors" and hides the repository URL for double-blind review. For the camera-ready version set `\anonymousfalse`, then fill in the author block (names, affiliation, e-mail) and check the URL in the Reproducibility section.
+`main.tex` currently prints the authors (`\anonymousfalse`); the e-mail line still reads "TBD". For a double-blind venue set `\anonymoustrue`: it prints "Anonymous Authors" and hides the repository URL. The Reproducibility section points to the GitHub repository, which is private: make it public (or upload an anonymized copy) before submitting.
 
 ## Status (100 seeds, leak-free re-run, Oct 2026)
 

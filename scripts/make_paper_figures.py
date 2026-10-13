@@ -7,7 +7,7 @@ same definitions as scripts/make_report_tables.py, so the figures, the tables an
 
 Writes (vector PDF, embedded TrueType fonts, IEEE column 3.5 in / page 7.16 in):
   paper/figures/fig_decomposition.pdf  ASR split into pool noise, count, bias prompts, meaning
-  paper/figures/fig_forest.pdf         paired effects with 95% CIs (defences, attack components)
+  paper/figures/fig_forest.pdf         paired effects of each defense component with 95% CIs
   paper/figures/fig_frontier.pdf       robustness-return frontier (net ASR vs clean return)
   paper/figures/fig_replay.pdf         seed-level case study (decisions, flips) under one recorded attack
   paper/tables/tab_main.tex            compact main-results table
@@ -73,7 +73,7 @@ def save(fig, name: str) -> None:
 
 # ---------------------------------------------------------------------------
 def fig_decomposition(summ: pd.DataFrame, st: pd.DataFrame) -> None:
-    levels = [("none", "No defence"), ("grounded", "Grounding"), ("grounded_risk", "Grounding + risk")]
+    levels = [("none", "No defense"), ("grounded", "Grounding"), ("grounded_risk", "Grounding + risk")]
     parts = [("Retrieval noise (placebo)", BLUE), ("Article count", ORANGE), ("Bias prompts", AQUA), ("Misinformation content", YELLOW)]
     fig, ax = plt.subplots(figsize=(COL, 1.55))
     for row, (d, name) in enumerate(levels):
@@ -114,27 +114,22 @@ def _forest(ax, rows: list[tuple[str, tuple]], title: str, xlabel: str) -> None:
 
 
 def fig_forest(st: pd.DataFrame) -> None:
+    """Defense components only (the attack-component ablations are in the appendix tables)."""
     has = lambda k: k in st.index  # noqa: E731
-    dfn = [("Grounding", "grounding"), ("Microstructure proxies", "micro"), ("Risk layer alone", "risk_alone"),
-           ("Risk layer on top of grounding", "risk_on_top"), ("Hold-on-conflict rule", "hold")]
-    defence = []
+    # "+" rows add one component to the configuration above it, as in the ablation comparisons
+    dfn = [("Price-only grounding", "grounding"), ("+ microstructure proxies", "micro"), ("Risk layer alone", "risk_alone"),
+           ("+ risk layer on grounding", "risk_on_top"), ("+ hold-on-conflict rule", "hold")]
+    rows = []
     for name, k in dfn:
-        for setting, tag in (("adaptive", "adapt."), ("frozen", "frozen")):
-            key = f"abl_def_{setting}_{k}"
-            if has(key):
-                defence.append((f"{name} ({tag})", pp(st, key)))
+        for setting in ("adaptive", "frozen"):
+            if has(f"abl_def_{setting}_{k}"):
+                rows.append((f"{name}, {setting}", pp(st, f"abl_def_{setting}_{k}")))
     for lo, hi in (("0.3", "0.7"), ("0.7", "1.0")):
-        key = f"abl_kappa_adaptive_{lo}_{hi}"
-        if has(key):
-            defence.append((rf"$\kappa$ {lo}$\to${hi} (adapt.)", pp(st, key)))
-    comps = [("Minor edits", "wo_minor"), ("Detector filtering", "wo_filtering"), ("Bias prompts", "wo_bias"), ("Strategy feedback", "wo_feedback"), ("Style rewriting", "wo_rewrite")]
-    attack_net = [(n, pp(st, f"abl_attack_{v}_net")) for n, v in comps if has(f"abl_attack_{v}_net")]
-    attack_mer = [(n, pp(st, f"abl_attack_{v}_mer")) for n, v in comps if has(f"abl_attack_{v}_mer")]
-    fig = plt.figure(figsize=(PAGE, 2.75))
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.25, 1.0], height_ratios=[1, 1], wspace=0.95, hspace=0.95)
-    _forest(fig.add_subplot(gs[:, 0]), defence, "(a) Defence components", "Reduction in net ASR (pp)  →  more robust")
-    _forest(fig.add_subplot(gs[0, 1]), attack_net, "(b) Attack components: decision impact", "Change in net ASR when present (pp)")
-    _forest(fig.add_subplot(gs[1, 1]), attack_mer, "(c) Attack components: exposure", "Change in MER when present (pp)")
+        for setting in ("adaptive", "frozen"):
+            if has(f"abl_kappa_{setting}_{lo}_{hi}"):
+                rows.append((rf"$\kappa$ {lo}$\to${hi}, {setting}", pp(st, f"abl_kappa_{setting}_{lo}_{hi}")))
+    fig, ax = plt.subplots(figsize=(COL, 2.55))
+    _forest(ax, rows, "", "Reduction in net ASR (pp)  →  more robust")
     save(fig, "fig_forest.pdf")
 
 
@@ -148,8 +143,8 @@ def fig_frontier(root: Path) -> None:
     if not dfs.exists():
         return
     d = pd.read_csv(dfs).set_index("arm")
-    pts = [("none", "No defence"), ("risk_only", "Risk only"), ("grounding_only", "Grounding (price)"),
-           ("grounding_micro", "Grounding\n+ micro"), ("full_defense", "Full defence")]
+    pts = [("none", "No defense"), ("risk_only", "Risk only"), ("grounding_only", "Grounding (price)"),
+           ("grounding_micro", "Grounding\n+ micro"), ("full_defense", "Full defense")]
     fig, ax = plt.subplots(figsize=(COL, 2.2))
     for v, label in pts:
         inj, cln = d.loc[f"injected__{v}"], d.loc[f"clean__{v}"]
@@ -172,7 +167,7 @@ def fig_replay(cfg) -> dict:
     from export_frontend_data import replay  # same deterministic replay as the frontend
 
     rp = replay(cfg, cfg.seed)
-    panels = [("attack", "(a) No defence"), ("grounded", "(b) Temporal grounding")]
+    panels = [("attack", "(a) No defense"), ("grounded", "(b) Temporal grounding")]
     fig, axes = plt.subplots(1, 2, figsize=(PAGE, 1.95), sharey=True)
     for ax, (arm, title) in zip(axes, panels):
         steps = rp["arms"][arm]
@@ -218,14 +213,14 @@ def tab_main(summ: pd.DataFrame, st: pd.DataFrame) -> None:
     def ci(key: str) -> str:
         m, lo, hi, _ = pp(st, key)
         return f"{tex_num(m)} [{tex_num(lo)}, {tex_num(hi)}]"
-    rows = [("No defence", "none"), ("Grounding", "grounded"), ("Grounding + risk", "grounded_risk")]
+    rows = [("No defense", "none"), ("Grounding", "grounded"), ("Grounding + risk", "grounded_risk")]
     lines = [r"\begin{table*}[t]", r"\centering",
              r"\caption{Main results over \val{NseedsRun} paired seeds (\%). Net ASR $=$ ASR $-$ ASR of the paraphrase placebo, with 95\% bootstrap CIs. "
              r"\emph{Adaptive}: MisGen's feedback loop runs against the defended agent. \emph{Frozen}: the attack recorded against the undefended agent is replayed verbatim. "
              r"Clean return is the paired clean agent's cumulative return over the 60-day window; drawdown is the attacked agent's maximum drawdown.}",
              r"\label{tab:main}", r"\small", r"\setlength{\tabcolsep}{4.5pt}",
              r"\begin{tabular}{@{}lrrrrrrr@{}}", r"\toprule",
-             r"Defence & MER & ASR & Placebo ASR & Net ASR (adaptive) & Net ASR (frozen) & Clean return & Drawdown \\", r"\midrule"]
+             r"Defense & MER & ASR & Placebo ASR & Net ASR (adaptive) & Net ASR (frozen) & Clean return & Drawdown \\", r"\midrule"]
     for name, d in rows:
         # frozen__none replays the tape against the agent it was recorded from, so it equals the adaptive cell exactly
         frozen = ci("net_none") if d == "none" else ci(f"net_frozen_{d}")
@@ -252,6 +247,8 @@ def main() -> None:
     fig_frontier(root)
     macros = fig_replay(cfg)
     tab_main(summ, st)
+    net = summ["ASR_net_mean"]
+    macros["RelCutGroundedNet"] = f"{100 * (1 - net['injected__grounded'] / net['injected__none']):.0f}"  # relative cut in net ASR
     macros["DecCountMaxAbs"] = f"{max(abs(pp(st, f'dec_count_{d}')[0]) for d in ('none', 'grounded', 'grounded_risk')):.1f}"
     macros["ShareNoiseOfNaive"] = f"{100 * summ.loc['placebo__none', 'ASR_mean'] / summ.loc['injected__none', 'ASR_mean']:.0f}"
     out = ROOT / "paper" / "tables" / "figmacros.tex"
