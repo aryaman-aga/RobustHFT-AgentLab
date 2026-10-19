@@ -51,5 +51,5 @@ RobustHFT-AgentLab (`rhal`): an offline, deterministic research framework (B.Tec
 - Placebo ASR is non-trivial: adding *any* documents to the pool reshuffles top-k and flips near-threshold decisions. That is why net ASR is reported.
 - Stop-loss/take-profit are evaluated at the daily close, not intraday.
 - Synthetic data by default. Real-price mode pairs real BTC-USD prices with template news; real headlines would need an LLM-based attacker (the rule-based operators need template fields).
-- LLM runs use a local 7B model on fewer seeds (reader 30, decider 10); decider-mode grounding is prompt-level only.
+- LLM runs use a local 7B model on fewer seeds (reader: 30). Decider mode (`agent.mode=llm`) is implemented and smoke-tested but not run at scale (10-15 s per decision, about 20 h for 10 seeds); its grounding is prompt-level only. The conflict-seeking attacker was run only against the full layer.
 - The price-impact stress test is frozen-only (the impacted path comes from the recorded tape), with a permanent, lexicon-based impact model.

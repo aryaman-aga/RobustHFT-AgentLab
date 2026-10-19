@@ -41,8 +41,6 @@ ablations:
     none_aligned:       {misgen.evidence_aware: aligned, grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
     grounding_aligned:  {misgen.evidence_aware: aligned, grounding.enabled: true, risk.enabled: false, features.micro.enabled: true}
     full_aligned:       {misgen.evidence_aware: aligned, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
-    none_conflict:      {misgen.evidence_aware: conflict, grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
-    grounding_conflict: {misgen.evidence_aware: conflict, grounding.enabled: true, risk.enabled: false, features.micro.enabled: true}
     full_conflict:      {misgen.evidence_aware: conflict, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
   conflict_handling:         # full layer (grounding + micro + risk); only the conflict rule changes
     hold:               {grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}

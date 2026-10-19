@@ -242,8 +242,6 @@ GENERALIZATION = [
     ("BTC-USD prices, frozen", "real_gain_frozen_grounded_net"),
     ("Aligned attacker, adaptive", "aware_adaptive_gain_aligned"),
     ("Aligned attacker, frozen", "aware_frozen_gain_aligned"),
-    ("Conflict-seeking attacker, adaptive", "aware_adaptive_gain_conflict"),
-    ("Conflict-seeking attacker, frozen", "aware_frozen_gain_conflict"),
     (r"Price impact $\gamma=1$, frozen", "imp_gain_grounded_1.0"),
     (r"Price impact $\gamma=2$, frozen", "imp_gain_grounded_2.0"),
 ]

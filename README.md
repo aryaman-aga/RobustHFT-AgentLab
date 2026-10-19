@@ -87,7 +87,7 @@ flowchart TD
   | Fake news also moves prices (γ = 2, frozen) | 100 | 17.0% → 6.5% | 10.5 points [8.8, 12.1] |
 
 - **Open problem.** An attacker that picks, among its fakes, the one most at odds with the market raises net ASR against the full layer by 5.6 points [4.1, 7.2].
-- **In progress:** the LLM-decider run (the LLM picks Buy/Sell/Hold itself) and the conflict-seeking attacker against grounding alone. Results land in `outputs/report.md` and the paper as runs finish.
+- **Not run at scale:** the LLM-decider mode (the LLM picks Buy/Sell/Hold itself), which needs about 20 hours for 10 markets on a laptop (command under [Running with a local LLM](#running-with-a-local-llm)), and the conflict-seeking attacker against no defense and grounding alone.
 
 ---
 
@@ -144,7 +144,7 @@ make llm-down           # stop the server
 - **Local only.** The client accepts loopback hosts only, so prompts (which contain the synthetic misinformation) never leave the machine.
 - **Reproducible.** Decoding is greedy with a fixed seed, answers are constrained to a JSON schema, and every answer is cached in `outputs/llm_cache/`, keyed by everything that can change it. Re-runs are free and exact.
 - **Loud failures.** A stopped server, a model that has not been pulled, or an unknown provider raises an error instead of silently degrading to Hold. Unreadable answers are counted; each run writes `llm_stats.json` with the model digest, cache hits and parse failures.
-- **Speed** on an Apple M2 with 16 GB: about 2 s per article in reader mode and up to about 12 s per decision in decider mode, so decider runs use fewer seeds.
+- **Speed** on an Apple M2 with 16 GB: about 2 s per article in reader mode (30 markets in about 8 hours) and 10-15 s per decision in decider mode (10 markets in about 20 hours, so it has not been run at scale). Run one LLM experiment at a time, with nothing else heavy alongside.
 - **API models** (`anthropic` or OpenAI-compatible) work the same way, with keys only in `.env` (see `.env.example`).
 
 ---
@@ -221,7 +221,7 @@ New comparisons always go into new families, so existing p-values never move (`s
 
 **Price impact** (`make price-impact`). The recorded attack also moves the shared price path, by γ daily standard deviations per unit of sentiment shift (γ = 0, 1, 2). Both twins trade the moved prices; only the attacked agent reads the fake text.
 
-**Replications.** The headline comparisons are repeated with the local-LLM reader, the LLM decider and real BTC-USD prices. Each is listed in `REPLICATIONS` in `scripts/make_report_tables.py` and has its own families.
+**Replications.** The headline comparisons are repeated with the local-LLM reader and real BTC-USD prices (and with the LLM decider once its run exists). Each is listed in `REPLICATIONS` in `scripts/make_report_tables.py` and has its own families.
 
 ---
 

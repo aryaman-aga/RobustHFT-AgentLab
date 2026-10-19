@@ -28,7 +28,7 @@ Last updated 19 Oct 2026. Target: AAAI-27 FinFM workshop, submission deadline 20
 - IEEE paper (8 pages), merged to `main` in PR #3.
 
 **Reviewer round** (branch `feat/reviewer-fixes`)
-- Local LLM through Ollama, installed inside `.venv`: reader mode and decider mode, with loud failures.
+- Local LLM through Ollama, installed inside `.venv`: reader mode (30 seeds) and decider mode (smoke-tested only), with loud failures.
 - Real BTC-USD prices, one historical window per seed.
 - Baselines: text-free agent, detection filter, robust aggregation.
 - Defense-aware attackers: evidence-aligned and conflict-seeking.
@@ -42,13 +42,15 @@ Last updated 19 Oct 2026. Target: AAAI-27 FinFM workshop, submission deadline 20
 
 | Window | Work |
 |---|---|
-| 19–26 Oct | Collect the LLM-decider run and the conflict-seeking attacker against grounding alone; regenerate tables and figures; write the decider paragraph |
-| 27 Oct – 2 Nov | Trim the main text toward 7 pages; internal read-through |
-| 3–9 Nov | AAAI-27 template build (`paper/aaai/`): 7 pages plus appendix, anonymised |
+| 19–26 Oct | AAAI-27 build (`paper/aaai/`): anonymised, 7 pages plus appendix; OpenReview profiles for all three authors (institutional e-mail) |
+| 27 Oct – 2 Nov | Internal read-through by all authors |
+| 3–9 Nov | Revisions from the read-through |
 | 10–20 Nov | Polish, final checks (`make lint test report paper`), submit on OpenReview |
 
 ## Later, for an archival venue
 
+- LLM decider at scale (10 seeds, about 20 h on the laptop; run overnight with nothing else running).
+- Conflict-seeking attacker against no defense and grounding alone (two arms in `aware_attack`, about 2.5 h).
 - Replicate with a frontier API model, cached for reproducibility.
 - Real news with an LLM-based attacker. The rule-based operators need template fields, so real headlines need LLM edits.
 - Adaptive (online) price impact, where the market reacts while the attacker adapts.
