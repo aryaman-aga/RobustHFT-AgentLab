@@ -113,6 +113,25 @@ def replication_comparisons(prefix: str, label: str) -> list[Comparison]:
     return out
 
 
+IMPACT_GAMMAS = ("0.0", "1.0", "2.0")  # must match scripts/run_price_impact.py
+
+
+def impact_comparisons() -> list[Comparison]:
+    """Price-impact stress test (frozen attack): grounding's gain and the content effect per gamma,
+    and the paired drop in grounding's gain relative to gamma = 0 (new families)."""
+    C, out = Comparison, []
+    fam = "Price impact: defense gain and content effect (frozen attack)"
+    for g in IMPACT_GAMMAS:
+        for d in ("grounded", "grounded_risk"):
+            out.append(C(f"imp_gain_{d}_{g}", fam, f"net ASR: none $-$ {d}, $\\gamma={g}$", "ASR_net", f"frozen__none@g{g}", f"frozen__{d}@g{g}"))
+        for d in ("none", "grounded"):
+            out.append(C(f"imp_meaning_{d}_{g}", fam, f"content: attack $-$ bias-matched, {d}, $\\gamma={g}$", "ASR", f"frozen__{d}@g{g}", f"placebo_bias__{d}@g{g}"))
+    fam = "Price impact: change in grounding's gain"
+    for g in IMPACT_GAMMAS[1:]:
+        out.append(C(f"imp_gain_drop_{g}", fam, f"gain: $\\gamma=0$ $-$ $\\gamma={g}$", "gain_net", "gain@g0.0", f"gain@g{g}"))
+    return out
+
+
 def decomposition_tables(full: pd.DataFrame, st: pd.DataFrame) -> tuple[str, str]:
     """Markdown + LaTeX: mean ASR of each control per defence level, and the meaning share with its CI."""
     mean = full.set_index("arm")["ASR_mean"]
@@ -442,6 +461,20 @@ def main() -> None:
             tex += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
             (tex_dir / "detector.tex").write_text("\n".join(tex))
 
+    imp_csv = root / "price_impact" / "price_impact_runs.csv"
+    imp_meta = root / "price_impact" / "impact_meta.json"
+    if imp_meta.exists():
+        im = json.loads(imp_meta.read_text())
+        extra["ImpShiftMedian"] = f"{im['abs_shift_median']:.2f}"
+        extra["ImpShiftPNinety"] = f"{im['abs_shift_p90']:.2f}"
+    if imp_csv.exists():
+        st = compare(pd.read_csv(imp_csv), impact_comparisons())
+        if not st.empty:
+            save_csv(st, root / "price_impact" / "price_impact_stats.csv")
+            add_stats(st)
+            md += ["## Price-impact stress test (frozen attack)", "", stats_markdown(st), ""]
+            (tex_dir / "stats_impact.tex").write_text(stats_latex(st, "Price-impact stress test: the frozen attack also moves the shared price path by "
+                                                                  "$\\gamma$ daily standard deviations per unit of sentiment shift; conventions as in Table~\\ref{tab:stats_main}.", "tab:stats_impact"))
     rep_stats: list[pd.DataFrame] = []
     for prefix, rel, label in REPLICATIONS:
         rdir = root / rel / "pipeline"

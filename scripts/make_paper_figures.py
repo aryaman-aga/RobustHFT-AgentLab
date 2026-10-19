@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from _common import ROOT, base_parser, parse_overrides  # noqa: E402
-from make_report_tables import REPLICATIONS, ablation_comparisons, control_comparisons, main_comparisons, replication_comparisons  # noqa: E402
+from make_report_tables import REPLICATIONS, ablation_comparisons, control_comparisons, impact_comparisons, main_comparisons, replication_comparisons  # noqa: E402
 
 from rhal.config import load_config  # noqa: E402
 from rhal.evaluation.stats import compare  # noqa: E402
@@ -55,6 +55,9 @@ def stats_for(root: Path) -> pd.DataFrame:
         f = root / "ablation" / group / f"ablation_{group}_runs.csv"
         if f.exists():
             frames.append(compare(pd.read_csv(f), ablation_comparisons(group)))
+    imp = root / "price_impact" / "price_impact_runs.csv"
+    if imp.exists():
+        frames.append(compare(pd.read_csv(imp), impact_comparisons()))
     for prefix, rel, label in REPLICATIONS:  # local-LLM and real-price replications (own families)
         f = root / rel / "pipeline" / "pipeline_runs.csv"
         if f.exists():
