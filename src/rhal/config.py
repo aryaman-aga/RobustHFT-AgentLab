@@ -9,7 +9,7 @@ from __future__ import annotations
 import copy
 import os
 from pathlib import Path
-from typing import Any, Literal, Mapping, Optional
+from typing import Any, Literal, Mapping, Optional, Union
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
@@ -33,9 +33,13 @@ class IntradayCfg(_Section):
 
 
 class DataCfg(_Section):
-    source: Literal["synthetic", "csv", "yfinance"] = "synthetic"
+    # synthetic: generated prices + news; csv: prices + news from files (one fixed path for every seed);
+    # real: a real price history (scripts/fetch_real_prices.py), one historical window per seed, with
+    # template news about the fictional company generated per seed and tied to the real returns
+    source: Literal["synthetic", "csv", "real"] = "synthetic"
     csv_prices: str = "data/sample/prices.csv"
     csv_news: str = "data/sample/news.csv"
+    real_prices: str = "data/real/btc_usd.csv"
     symbol: str = "SYNTH"
     n_days: int = 400
     eval_days: int = 60
@@ -64,6 +68,9 @@ class GroundingCfg(_Section):
     top_k: int = 5
     horizon: int = 5
     strength: float = Field(0.7, ge=0.0, le=1.0)
+    # scale of the analogs' mean forward return inside s_mkt (a typical H-day move). "auto" = median
+    # |H-day log return| over the prices before the evaluation window (for real data; no lookahead)
+    analog_scale: Union[float, Literal["auto"]] = 0.03
 
 
 class RetrievalCfg(_Section):

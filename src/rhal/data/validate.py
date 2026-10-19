@@ -11,7 +11,16 @@ PRICE_COLS = ["date", "open", "high", "low", "close", "volume"]
 NEWS_COLS = ["id", "date", "text"]
 
 
-def validate_prices(df: pd.DataFrame) -> pd.DataFrame:
+REPAIR_TOL = 0.005  # real vendor data: high/low may miss open/close by float noise; fix up to 0.5%, reject more
+
+
+def validate_prices(df: pd.DataFrame, repair: bool = False) -> pd.DataFrame:
+    """Clean, typed, sorted copy of an OHLCV frame.
+
+    ``repair=True`` is for real downloaded data: rows with missing values are dropped, and a high
+    (low) that is below (above) open/close by at most ``REPAIR_TOL`` is widened to fit. Anything
+    larger still raises, and so does zero volume (it would break volume_shock and Amihud).
+    """
     missing = [c for c in PRICE_COLS if c not in df.columns]
     if missing:
         raise ValueError(f"prices missing columns: {missing}")
@@ -19,6 +28,15 @@ def validate_prices(df: pd.DataFrame) -> pd.DataFrame:
     out["date"] = pd.to_datetime(out["date"]).dt.strftime("%Y-%m-%d")
     for c in ["open", "high", "low", "close", "volume"]:
         out[c] = pd.to_numeric(out[c], errors="raise").astype(float)
+    if repair:
+        out = out.dropna(subset=PRICE_COLS).reset_index(drop=True)
+        if (out["volume"] <= 0).any():
+            raise ValueError("zero or negative volume in real prices")
+        top, bot = out[["open", "close", "low"]].max(axis=1), out[["open", "close", "high"]].min(axis=1)
+        if ((top - out["high"]) / top > REPAIR_TOL).any() or ((out["low"] - bot) / bot > REPAIR_TOL).any():
+            raise ValueError(f"high/low inconsistent with open/close by more than {REPAIR_TOL:.1%}")
+        out["high"] = out[["high", "open", "close", "low"]].max(axis=1)
+        out["low"] = out[["low", "open", "close", "high"]].min(axis=1)
     if (out[["open", "high", "low", "close"]] <= 0).any().any():
         raise ValueError("non-positive prices found")
     if (out["high"] < out[["open", "close", "low"]].max(axis=1)).any():

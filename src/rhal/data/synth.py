@@ -271,6 +271,16 @@ def _simulate_news(prices: pd.DataFrame, cfg: SynthConfig, seed: int) -> pd.Data
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+def simulate_news(prices: pd.DataFrame, news_per_day: int, seed: int, rho: float = 0.35) -> pd.DataFrame:
+    """Template news for an arbitrary (e.g. real) price path, tied to its next-day returns.
+
+    The text always describes the fictional company of lexicon.ENTITY, never the real asset, so
+    synthetic text stays synthetic even when the prices are real.
+    """
+    p = prices.reset_index(drop=True)
+    return _simulate_news(p, SynthConfig(n_days=len(p), news_per_day=news_per_day, rho=rho), seed)
+
+
 def generate_synthetic_dataset(cfg: SynthConfig, seed: int) -> dict[str, pd.DataFrame]:
     """Return ``{"prices": df, "news": df, ["intraday": df]}``."""
     prices = _simulate_prices(cfg, seed)

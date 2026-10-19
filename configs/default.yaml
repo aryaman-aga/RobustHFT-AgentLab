@@ -6,9 +6,10 @@ seed: 42
 output_dir: outputs
 
 data:
-  source: synthetic            # synthetic | csv | yfinance
+  source: synthetic            # synthetic | csv | real (real = data.real_prices, one historical window per seed)
   csv_prices: data/sample/prices.csv
   csv_news: data/sample/news.csv
+  real_prices: data/real/btc_usd.csv   # written once by scripts/fetch_real_prices.py (git-ignored)
   symbol: SYNTH
   n_days: 400                  # synthetic history length (first ~250 = warmup/analog library)
   eval_days: 60                # trading days evaluated (paper: 60 BTC days)
@@ -34,6 +35,7 @@ grounding:
   top_k: 5
   horizon: 5                   # analog forward-outcome horizon (must be fully in the past)
   strength: 0.7                # kappa: how strongly inconsistent text is shrunk toward market evidence
+  analog_scale: 0.03           # typical H-day move scaling analog outcomes in s_mkt; "auto" = from pre-window prices
 
 retrieval:
   method: tfidf                # tfidf | bm25 | embed (embed requires sentence-transformers)

@@ -45,7 +45,7 @@ from ..agent import LLMPolicy, Perceiver, PortfolioState, Profile, RiskLayer, Ru
 from ..agent.llm_reader import LLMTextScorer
 from ..backtest import Backtester
 from ..config import Config
-from ..data.synth import SynthConfig, generate_synthetic_dataset
+from ..data.synth import SynthConfig, generate_synthetic_dataset, simulate_news
 from ..data import load_news, load_prices
 from ..features import build_feature_frame
 from ..features.windows import feature_columns
@@ -120,6 +120,9 @@ def prepare_dataset(cfg: Config, seed: int) -> Dataset:
             child_seed(seed, "data"),
         )
         prices, news, intraday = d["prices"], d["news"], d.get("intraday")
+    elif cfg.data.source == "real":  # one historical window per seed; template news generated per seed
+        prices = real_window(load_prices(cfg.data.real_prices, repair=True), cfg.data.n_days, cfg.data.eval_days, seed - cfg.seed)
+        news, intraday = simulate_news(prices, cfg.data.news_per_day, child_seed(seed, "data")), None
     else:
         prices, news, intraday = load_prices(cfg.data.csv_prices), load_news(cfg.data.csv_news), None
     f = cfg.features
@@ -129,6 +132,24 @@ def prepare_dataset(cfg: Config, seed: int) -> Dataset:
     )
     feats["close"] = prices["close"].to_numpy()
     return Dataset(prices, news, intraday, feats, prices["date"].tolist())
+
+
+def real_window(full: pd.DataFrame, n_days: int, eval_days: int, index: int) -> pd.DataFrame:
+    """The ``index``-th n_days window of a real history, counting back from the latest data.
+
+    Consecutive windows are shifted by ``eval_days``, so their evaluation segments (the last
+    ``eval_days`` rows) never overlap; indices wrap around after the last full window.
+    """
+    n_win = (len(full) - n_days) // eval_days + 1
+    if n_win < 1:
+        raise ValueError(f"real price history has {len(full)} rows, fewer than data.n_days={n_days}")
+    end = len(full) - (index % n_win) * eval_days
+    return full.iloc[end - n_days:end].reset_index(drop=True)
+
+
+def n_real_windows(cfg: Config) -> int:
+    """How many distinct evaluation windows the real price history offers."""
+    return (len(load_prices(cfg.data.real_prices, repair=True)) - cfg.data.n_days) // cfg.data.eval_days + 1
 
 
 def train_detector(cfg: Config, seed: int, target_fpr: float = 0.10) -> DetectabilityModel:
@@ -162,6 +183,16 @@ class Simulation:
         self.filter_thresholds: dict[float, float] = {}  # flag rate -> detector threshold (from pre-window news)
         self._det_scores: dict[str, float] = {}  # detector score per text (filters share it)
         self._attacker_ev: EvidenceBuilder | None = None  # defense-aware attacker's view of the market
+        self.analog_scale = self._analog_scale(cfg)
+
+    def _analog_scale(self, cfg: Config) -> float:
+        """grounding.analog_scale, or for "auto" the median |H-day log return| over windows that end
+        by the start of the evaluation window (uses no price after t0)."""
+        if cfg.grounding.analog_scale != "auto":
+            return float(cfg.grounding.analog_scale)
+        h = cfg.grounding.horizon
+        lc = np.log(self.ds.prices["close"].to_numpy(dtype=float)[: self.t0 + 1])
+        return float(np.median(np.abs(lc[h:] - lc[:-h])))
 
     # -- baselines and the defense-aware attacker ----------------------------------
     def detect_filter(self, fpr: float):
@@ -186,7 +217,7 @@ class Simulation:
         if self._attacker_ev is None:
             c = self.cfg.grounding
             self._attacker_ev = EvidenceBuilder(self.ds.feats, ["z_" + k for k in feature_columns(True)], micro=True,
-                                                window=c.window, horizon=c.horizon, top_k=c.top_k)
+                                                window=c.window, horizon=c.horizon, top_k=c.top_k, analog_scale=self.analog_scale)
         return self._attacker_ev.build(t).market_signal
 
     # -- LLM plumbing --------------------------------------------------------
@@ -213,7 +244,8 @@ class Simulation:
         retr = Retriever(cfg.retrieval.method, cfg.retrieval.top_k, cfg.retrieval.recency_days, cfg.retrieval.recency_decay, background=self.text_background,
                          doc_filter=doc_filter)
         perc = Perceiver(self.ds.feats, retr, self.ds.dates)
-        ev = EvidenceBuilder(self.ds.feats, zc, micro=spec.micro, window=cfg.grounding.window, horizon=cfg.grounding.horizon, top_k=cfg.grounding.top_k) if spec.grounded else None
+        ev = EvidenceBuilder(self.ds.feats, zc, micro=spec.micro, window=cfg.grounding.window, horizon=cfg.grounding.horizon, top_k=cfg.grounding.top_k,
+                             analog_scale=self.analog_scale) if spec.grounded else None
         if cfg.agent.mode == "rule":
             policy = RulePolicy(cfg.agent.action_threshold)
         elif cfg.agent.mode == "llm":  # decider mode: the LLM picks the action
