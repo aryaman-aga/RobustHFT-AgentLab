@@ -84,6 +84,35 @@ def control_comparisons() -> list[Comparison]:
     return out
 
 
+# Replications of the main experiment with another reader/agent or on real prices. Each run lives in
+# its own directory under the output root and gets its own families, so nothing above moves.
+REPLICATIONS = [  # (key/macro prefix, directory under the output root, label)
+    ("llmr", "llm/reader_qwen7b", "LLM reader"),
+    ("llmd", "llm/decider_qwen7b", "LLM decider"),
+    ("real", "real_btc", "BTC-USD prices"),
+]
+
+
+def replication_comparisons(prefix: str, label: str) -> list[Comparison]:
+    """The headline comparisons of the main experiment, re-keyed ``<prefix>_<key>`` in new families.
+    Comparisons whose arms a run does not have (e.g. matched placebos in the decider run) are skipped."""
+    C, out = Comparison, []
+    fam = f"{label}: misinformation effect and defense gain"
+    for d in LEVELS:
+        out.append(C(f"{prefix}_net_{d}", fam, f"net ASR, adaptive, {d}", "ASR", f"injected__{d}", f"placebo__{d}"))
+    for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
+        for d in ("grounded", "grounded_risk"):
+            out.append(C(f"{prefix}_gain_{setting}_{d}_net", fam, f"net ASR ({setting}): none $-$ {d}", "ASR_net", f"{pre}__none", f"{pre}__{d}"))
+        out.append(C(f"{prefix}_gain_{setting}_risk_net", fam, f"net ASR ({setting}): grounded $-$ grounded_risk", "ASR_net", f"{pre}__grounded", f"{pre}__grounded_risk"))
+    out.append(C(f"{prefix}_placebo_grounded", fam, "placebo ASR: none $-$ grounded", "ASR", "placebo__none", "placebo__grounded"))
+    out.append(C(f"{prefix}_cost_grounded", fam, "clean CR: none $-$ grounded", "CR", "clean__none", "clean__grounded"))
+    fam = f"{label}: ASR decomposition on the frozen tape"
+    for d in ("none", "grounded"):
+        out.append(C(f"{prefix}_dec_bias_{d}", fam, f"bias: bias-matched $-$ matched, {d}", "ASR", f"placebo_bias__{d}", f"placebo_matched__{d}"))
+        out.append(C(f"{prefix}_dec_meaning_{d}", fam, f"content: attack $-$ bias-matched, {d}", "ASR", f"frozen__{d}", f"placebo_bias__{d}"))
+    return out
+
+
 def decomposition_tables(full: pd.DataFrame, st: pd.DataFrame) -> tuple[str, str]:
     """Markdown + LaTeX: mean ASR of each control per defence level, and the meaning share with its CI."""
     mean = full.set_index("arm")["ASR_mean"]
@@ -413,6 +442,33 @@ def main() -> None:
             tex += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
             (tex_dir / "detector.tex").write_text("\n".join(tex))
 
+    rep_stats: list[pd.DataFrame] = []
+    for prefix, rel, label in REPLICATIONS:
+        rdir = root / rel / "pipeline"
+        if not (rdir / "pipeline_runs.csv").exists():
+            continue
+        rsum = pd.read_csv(rdir / "pipeline_summary.csv")
+        aggs[_macro_name(prefix)] = rsum  # e.g. \val{LlmrInjectedNoneASR}
+        extra[_macro_name("Nseeds", prefix)] = str(int(rsum["n_seeds"].max()))
+        llm = rdir / "llm_stats.json"
+        if llm.exists():
+            ls = json.loads(llm.read_text())
+            extra[_macro_name(prefix, "model")] = str(ls.get("model", "")).replace("_", "\\_")
+            extra[_macro_name(prefix, "parse", "failures")] = str(ls.get("parse_failures", 0))
+            if "texts_scored" in ls:
+                extra[_macro_name(prefix, "texts", "scored")] = str(ls["texts_scored"])
+            if "cache_misses" in ls:
+                extra[_macro_name(prefix, "llm", "calls")] = str(ls["cache_misses"])
+        st = compare(pd.read_csv(rdir / "pipeline_runs.csv"), replication_comparisons(prefix, label))
+        if not st.empty:
+            save_csv(st, rdir / "pipeline_stats_replication.csv")
+            add_stats(st)
+            rep_stats.append(st)
+            md += [f"## Replication: {label} ({rel})", "", stats_markdown(st), ""]
+    if rep_stats:
+        (tex_dir / "stats_replications.tex").write_text(stats_latex(pd.concat(rep_stats, ignore_index=True),
+                                                                    "Paired comparisons over seeds for the replications with a local LLM and on real BTC-USD prices; "
+                                                                    "conventions as in Table~\\ref{tab:stats_main}.", "tab:stats_replications"))
     emit_numbers(aggs, extra, tex_dir / "numbers.tex")
     (root / "report.md").write_text("\n".join(md), encoding="utf-8")
     print("\n".join(md))
