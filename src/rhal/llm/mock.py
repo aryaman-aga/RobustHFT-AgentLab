@@ -7,7 +7,8 @@ derived from the lexicon sentiment score:
 
 * reader requests (schema with ``score``) get exactly ``score_sentiment(article)``, so reader
   mode with this client reproduces the lexicon results bit for bit (tests/test_llm.py);
-* decider requests get an action, a confidence and a ``news_stance`` from the whole prompt.
+* decider requests get an action, a confidence (0..100) and a ``news_stance`` (-100..100) from
+  the whole prompt.
 """
 from __future__ import annotations
 
@@ -29,5 +30,4 @@ class MockLLM(LLMClient):
             return json.dumps({"score": score_sentiment(article)})
         s = score_sentiment(user)
         action = "Buy" if s > 0.15 else "Sell" if s < -0.15 else "Hold"
-        return json.dumps({"action": action, "confidence": round(min(1.0, abs(s)), 3), "news_stance": round(s, 3),
-                           "rationale": "mock: lexicon sentiment of provided context"})
+        return json.dumps({"action": action, "confidence": int(round(100 * min(1.0, abs(s)))), "news_stance": int(round(100 * s))})

@@ -196,12 +196,12 @@ def _decider(small_cfg, small_dataset, detector, reply):
 
 
 def test_decider_memory_shows_the_llms_own_stance_not_lexicon_numbers(small_cfg, small_dataset, detector):
-    reply = json.dumps({"action": "Buy", "confidence": 0.8, "news_stance": 0.123, "rationale": "ok"})
+    reply = json.dumps({"action": "Buy", "confidence": 80, "news_stance": 12})
     sim = _decider(small_cfg, small_dataset, detector, reply)
     r = sim.run(RunSpec("injected__none", "misgen"))
     texts = [float(x) for p in sim._llm.prompts for x in re.findall(r"text ([+-]\d\.\d\d)", p)]
     assert texts and all(abs(x - 0.12) < 1e-9 for x in texts)  # only the LLM's own stance, never a lexicon score
-    assert all(s["text_signal"] == 0.123 and not s["parse_failed"] for s in r.treated_steps)
+    assert all(s["text_signal"] == 0.12 and s["confidence"] == 0.8 and not s["parse_failed"] for s in r.treated_steps)
     assert r.metrics["parse_fail_rate"] == 0.0
 
 

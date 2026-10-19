@@ -7,8 +7,11 @@ SurrogatePolicy : deterministic mock-LLM. Reads retrieved docs through a text sc
                   and (if grounded) shrinks inconsistent text toward market evidence:
                       s_g = s - kappa * (1 - c) * (s - s_mkt)
 LLMPolicy       : decider mode. Builds the prompt (Perception + Profile + Memory + Evidence +
-                  docs), asks the LLM for schema-checked JSON {action, confidence, news_stance,
-                  rationale}. The LLM's own news_stance is the text signal (so the risk layer
+                  docs), asks the LLM for schema-checked JSON {action, confidence 0..100,
+                  news_stance -100..100}. Integer scales keep answers short and avoid the long
+                  floats grammar-constrained decoding can produce; there is no free-text
+                  rationale (it is unused and slows a local model). The LLM's own news_stance
+                  (rescaled to [-1, 1]) is the text signal (so the risk layer
                   and memory never see lexicon numbers). Connection errors raise; an unreadable
                   answer becomes Hold and is flagged (parse_failed -> metric parse_fail_rate).
 """
@@ -132,11 +135,10 @@ DECIDER_SCHEMA = {
     "type": "object",
     "properties": {
         "action": {"type": "string", "enum": ["Buy", "Sell", "Hold"]},
-        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        "news_stance": {"type": "number", "minimum": -1, "maximum": 1},
-        "rationale": {"type": "string"},
+        "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+        "news_stance": {"type": "integer", "minimum": -100, "maximum": 100},
     },
-    "required": ["action", "confidence", "news_stance", "rationale"],
+    "required": ["action", "confidence", "news_stance"],
 }
 
 
@@ -155,7 +157,7 @@ def _parse_json(text: str) -> dict:
 
 
 class LLMPolicy:
-    def __init__(self, client: LLMClient, fallback: SurrogatePolicy, max_tokens: int = 160):
+    def __init__(self, client: LLMClient, fallback: SurrogatePolicy, max_tokens: int = 48):
         self.client = client
         self.fallback = fallback  # only supplies the action threshold
         self.max_tokens = max_tokens
@@ -180,9 +182,9 @@ class LLMPolicy:
         try:
             obj = _parse_json(r.text)
             a = Action(str(obj["action"]).strip().capitalize())
-            conf = float(np.clip(float(obj["confidence"]), 0, 1))
-            stance = float(np.clip(float(obj["news_stance"]), -1, 1))
-            rat, failed = str(obj.get("rationale", ""))[:300], False
+            conf = float(np.clip(float(obj["confidence"]) / 100.0, 0, 1))
+            stance = float(np.clip(float(obj["news_stance"]) / 100.0, -1, 1))
+            rat, failed = f"conf={obj['confidence']} stance={obj['news_stance']}", False
         except (ValueError, KeyError, TypeError) as e:  # unreadable answer -> conservative Hold, flagged
             a, conf, stance, rat, failed = Action.HOLD, 0.0, 0.0, f"parse-failure fallback: {e}", True
         c = consistency_score(stance, s_mkt)  # the LLM's own reading of the news, not the lexicon's
