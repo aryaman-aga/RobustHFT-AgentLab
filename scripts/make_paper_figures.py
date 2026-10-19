@@ -9,6 +9,7 @@ Writes (vector PDF, embedded TrueType fonts, IEEE column 3.5 in / page 7.16 in):
   paper/figures/fig_decomposition.pdf  ASR split into pool noise, count, bias prompts, meaning
   paper/figures/fig_forest.pdf         paired effects of each defense component with 95% CIs
   paper/figures/fig_frontier.pdf       robustness-return frontier (net ASR vs clean return)
+  paper/figures/fig_generalization.pdf grounding's gain across readers, data, attackers and price impact
   paper/figures/fig_replay.pdf         seed-level case study (decisions, flips) under one recorded attack
   paper/tables/tab_main.tex            compact main-results table
   paper/tables/figmacros.tex           numbers quoted in the prose that only these figures compute
@@ -73,7 +74,7 @@ def pp(st: pd.DataFrame, key: str) -> tuple[float, float, float, bool]:
 def save(fig, name: str) -> None:
     out = ROOT / "paper" / "figures" / name
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out)
+    fig.savefig(out, metadata={"CreationDate": None})  # no timestamp: identical data -> identical bytes
     plt.close(fig)
     print(f"wrote {out.relative_to(ROOT)}")
 
@@ -138,6 +139,28 @@ def fig_forest(st: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(COL, 2.55))
     _forest(ax, rows, "", "Reduction in net ASR (pp)  →  more robust")
     save(fig, "fig_forest.pdf")
+
+
+# (label, key) rows of the generalization figure; rows whose run is missing are skipped
+GENERALIZATION = [
+    ("Lexicon reader, adaptive", "gain_adaptive_grounded_net"), ("Lexicon reader, frozen", "gain_frozen_grounded_net"),
+    ("LLM reader, adaptive", "llmr_gain_adaptive_grounded_net"), ("LLM reader, frozen", "llmr_gain_frozen_grounded_net"),
+    ("LLM decider (prompt), adaptive", "llmd_gain_adaptive_grounded_net"), ("LLM decider (prompt), frozen", "llmd_gain_frozen_grounded_net"),
+    ("BTC-USD prices, adaptive", "real_gain_adaptive_grounded_net"), ("BTC-USD prices, frozen", "real_gain_frozen_grounded_net"),
+    ("Aligned attacker, adaptive", "aware_adaptive_gain_aligned"), ("Aligned attacker, frozen", "aware_frozen_gain_aligned"),
+    (r"Price impact $\gamma=1$, frozen", "imp_gain_grounded_1.0"), (r"Price impact $\gamma=2$, frozen", "imp_gain_grounded_2.0"),
+]
+
+
+def fig_generalization(st: pd.DataFrame) -> None:
+    """Grounding's reduction in net ASR in every setting we test (one column)."""
+    rows = [(label, pp(st, key)) for label, key in GENERALIZATION if key in st.index]
+    if len(rows) < 3:
+        return
+    fig, ax = plt.subplots(figsize=(COL, 0.32 + 0.17 * len(rows)))
+    _forest(ax, rows, "", "Reduction in net ASR from grounding (pp)  →  more robust")
+    ax.set_xlim(left=min(-2.0, min(r[1][1] for r in rows) - 1.0))
+    save(fig, "fig_generalization.pdf")
 
 
 # label offsets (dx, dy, ha) in data units, chosen so no label crosses a marker, a whisker or an axis
@@ -252,6 +275,7 @@ def main() -> None:
     fig_decomposition(summ, st)
     fig_forest(st)
     fig_frontier(root)
+    fig_generalization(st)
     macros = fig_replay(cfg)
     tab_main(summ, st)
     net = summ["ASR_net_mean"]
