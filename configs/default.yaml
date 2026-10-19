@@ -78,6 +78,7 @@ risk:
   stop_loss: 0.06
   take_profit: 0.12
   hold_on_conflict: true
+  conflict_mode: hold          # hold | shrink: on conflict, force Hold, or keep the action and move only c of the way
   conflict_threshold: 0.6      # consistency below this -> hold (|text-market| > 0.8)
   min_confidence: 0.3
   drawdown_throttle: 0.10      # halve size when DD exceeds this

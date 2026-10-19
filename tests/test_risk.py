@@ -1,3 +1,5 @@
+import pytest
+
 from rhal.agent.policy import PolicyOutput
 from rhal.agent.risk import PortfolioState, RiskLayer
 from rhal.schemas import Action
@@ -60,3 +62,13 @@ def test_hold_keeps_current_position():
     s = PortfolioState(cash=50.0, shares=5, entry_price=10.0, last_price=10.0, peak_equity=100.0)
     a, tgt, _ = r.apply(_out(Action.HOLD), s, 0.01)
     assert a == Action.HOLD and abs(tgt - 0.5) < 1e-9
+
+
+def test_shrink_on_conflict_keeps_the_action_and_moves_part_of_the_way():
+    s = PortfolioState(cash=100.0, last_price=10.0)  # flat: current position 0
+    full_a, full_t, _ = _risk(hold_on_conflict=False).apply(_out(cons=0.4), s, 0.01)
+    a, t, ov = _risk(conflict_mode="shrink").apply(_out(cons=0.4), s, 0.01)
+    assert a == full_a == Action.BUY and any(o.startswith("shrink_on_conflict") for o in ov)
+    assert t == pytest.approx(0.4 * full_t)  # c = 0.4 of the way from 0 to the unconstrained target
+    a, t2, ov = _risk(conflict_mode="shrink").apply(_out(cons=0.9), s, 0.01)  # no conflict: unchanged
+    assert t2 == pytest.approx(full_t) and not any("conflict" in o for o in ov)

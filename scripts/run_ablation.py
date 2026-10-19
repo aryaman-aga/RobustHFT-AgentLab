@@ -7,6 +7,7 @@ Groups (configs/ablation.yaml):
   retrieval / grounding_strength -- sensitivity sweeps.
   baselines    -- standard alternatives to grounding: text-free agent, detection filter, robust aggregation.
   aware_attack -- an attacker that reads the public market evidence the defense uses (aligned / conflict).
+  conflict_handling -- hold-on-conflict vs shrink-on-conflict vs no rule, against a standard and a conflict-seeking attacker.
 The defense and grounding_strength groups evaluate every variant twice: against an
 adaptive attacker (injected__*) and against the frozen attack recorded from the
 undefended agent of the same seed (frozen__*). The tape is recorded once per seed and attacker
@@ -38,7 +39,7 @@ def specs_for(group: str, name: str, ov: dict, cfg) -> list[RunSpec]:
     m = ov.get("features.micro.enabled", cfg.features.micro.enabled)
     if group == "attack":  # undefended agent, as in the paper's ablation
         return [RunSpec(f"injected__{name}", "misgen", False, False, False, ov), RunSpec(f"placebo__{name}", "placebo", False, False, False, ov)]
-    if group in ("defense", "grounding_strength", "baselines", "aware_attack"):
+    if group in ("defense", "grounding_strength", "baselines", "aware_attack", "conflict_handling"):
         if group == "grounding_strength":
             g, r, m = True, True, True
         return [RunSpec(f"injected__{name}", "misgen", g, r, m, ov), RunSpec(f"frozen__{name}", "replay", g, r, m, ov),
@@ -51,7 +52,7 @@ def specs_for(group: str, name: str, ov: dict, cfg) -> list[RunSpec]:
 def main() -> None:
     p = base_parser("Run ablations")
     p.add_argument("--ablation", default=str(ROOT / "configs" / "ablation.yaml"))
-    p.add_argument("--group", default="all", help="attack | defense | retrieval | grounding_strength | baselines | aware_attack | all")
+    p.add_argument("--group", default="all", help="attack | defense | retrieval | grounding_strength | baselines | aware_attack | conflict_handling | all")
     a = p.parse_args()
     cfg = load_config(a.config, parse_overrides(a.set))
     if a.out:

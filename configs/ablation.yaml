@@ -42,3 +42,10 @@ ablations:
     grounding_aligned:  {misgen.evidence_aware: aligned, grounding.enabled: true, risk.enabled: false, features.micro.enabled: true}
     full_aligned:       {misgen.evidence_aware: aligned, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
     full_conflict:      {misgen.evidence_aware: conflict, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
+  conflict_handling:         # full layer (grounding + micro + risk); only the conflict rule changes
+    hold:               {grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
+    shrink:             {risk.conflict_mode: shrink, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
+    nohold:             {risk.hold_on_conflict: false, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
+    hold_conflict:      {misgen.evidence_aware: conflict, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
+    shrink_conflict:    {misgen.evidence_aware: conflict, risk.conflict_mode: shrink, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
+    nohold_conflict:    {misgen.evidence_aware: conflict, risk.hold_on_conflict: false, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}

@@ -22,7 +22,7 @@ from rhal.evaluation.stats import Comparison, compare
 from rhal.utils.io import ensure_dir, save_csv
 
 PCT = {"MER", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "ASR_given_exposed", "exposure_rate", "CR", "CR_clean_paired", "CR_delta_vs_clean", "max_drawdown", "hold_rate",
-       "filter_recall", "filter_clean_drop", "parse_fail_rate"}
+       "filter_recall", "filter_clean_drop", "parse_fail_rate", "position_gap"}
 # Generated tables shrink to the available width only when they would overflow it (needs \\usepackage{adjustbox}).
 FIT_BEGIN, FIT_END = "\\begin{adjustbox}{max width=\\linewidth}", "\\end{adjustbox}"
 WIDE_COLS = 6  # arm tables with this many metric columns become two-column table*
@@ -145,6 +145,14 @@ def ablation_comparisons(group: str) -> list[Comparison]:
         for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
             for key, a, b in pairs:
                 out.append(C(f"aware_{setting}_{key}", f"Defense-aware attacker, {setting} (net ASR)", f"{a} $-$ {b}", "ASR_net", f"{pre}__{a}", f"{pre}__{b}"))
+    elif group == "conflict_handling":  # a - b: positive = the second-named rule leaves the lower value
+        for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
+            for atk in ("", "_conflict"):
+                tag = "conflict-seeking attacker" if atk else "standard attacker"
+                for key, a, b in (("shrink", f"hold{atk}", f"shrink{atk}"), ("nohold", f"hold{atk}", f"nohold{atk}")):
+                    for metric, mname in (("ASR_net", "net ASR"), ("position_gap", "position gap")):
+                        out.append(C(f"conf_{setting}{atk}_{key}_{metric.lower()}", f"Conflict rule, {setting}, {tag} ({mname})",
+                                     f"{a} $-$ {b}", metric, f"{pre}__{a}", f"{pre}__{b}"))
     elif group == "retrieval":  # is net ASR an artefact of top-k? (expect no difference)
         for k in ("k2", "k8"):
             out.append(C(f"abl_ret_{k}_net", "Retrieval breadth (net ASR)", f"net ASR: {k} $-$ k4", "ASR_net", f"injected__{k}", "injected__k4"))
@@ -357,7 +365,8 @@ def main() -> None:
     abl_stats: list[pd.DataFrame] = []
     ext_stats: list[pd.DataFrame] = []  # baselines + defense-aware attacker: their own appendix table
     for group, cols in [("attack", ["MER", "MER_lift", "ASR", "ASR_net", "CR"]), ("defense", ["ASR", "ASR_net", "ASR_active_net", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"]), ("retrieval", ["MER", "ASR", "ASR_net", "CR"]), ("grounding_strength", ["ASR", "ASR_net", "CR", "CR_clean_paired"]),
-                        ("baselines", ["MER", "ASR", "ASR_net", "CR", "CR_clean_paired", "filter_recall", "filter_clean_drop"]), ("aware_attack", ["MER", "ASR", "ASR_net", "CR_clean_paired"])]:
+                        ("baselines", ["MER", "ASR", "ASR_net", "CR", "CR_clean_paired", "filter_recall", "filter_clean_drop"]), ("aware_attack", ["MER", "ASR", "ASR_net", "CR_clean_paired"]),
+                        ("conflict_handling", ["ASR", "ASR_net", "position_gap", "CR_clean_paired", "hold_rate"])]:
         f = root / "ablation" / group / f"ablation_{group}_summary.csv"
         if f.exists():
             agg = pd.read_csv(f)
@@ -370,7 +379,7 @@ def main() -> None:
                 if not st.empty:
                     save_csv(st, root / "ablation" / group / f"ablation_{group}_stats.csv")
                     add_stats(st)
-                    (ext_stats if group in ("baselines", "aware_attack") else abl_stats).append(st)
+                    (ext_stats if group in ("baselines", "aware_attack", "conflict_handling") else abl_stats).append(st)
                     md += [f"### Paired comparisons: {group}", "", stats_markdown(st), ""]
     if ext_stats:
         (tex_dir / "stats_extensions.tex").write_text(stats_latex(pd.concat(ext_stats, ignore_index=True), "Paired comparisons over seeds for the baseline defenses and the defense-aware attacker; conventions as in Table~\\ref{tab:stats_main}. "

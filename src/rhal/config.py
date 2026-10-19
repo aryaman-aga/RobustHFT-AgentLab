@@ -127,6 +127,7 @@ class RiskCfg(_Section):
     stop_loss: float = 0.06
     take_profit: float = 0.12
     hold_on_conflict: bool = True
+    conflict_mode: Literal["hold", "shrink"] = "hold"  # hold = paper rule; shrink = keep the action, move only c of the way
     conflict_threshold: float = 0.6
     min_confidence: float = 0.3
     drawdown_throttle: float = 0.10

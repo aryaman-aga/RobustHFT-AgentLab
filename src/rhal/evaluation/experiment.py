@@ -256,7 +256,7 @@ class Simulation:
         r = cfg.risk
         risk = RiskLayer(enabled=spec.risk, max_position=r.max_position, vol_target=r.vol_target, stop_loss=r.stop_loss, take_profit=r.take_profit,
                          hold_on_conflict=r.hold_on_conflict, conflict_threshold=r.conflict_threshold, min_confidence=r.min_confidence,
-                         drawdown_throttle=r.drawdown_throttle)
+                         drawdown_throttle=r.drawdown_throttle, conflict_mode=r.conflict_mode)
         return TradingAgent(perceiver=perc, evidence=ev, policy=policy, risk=risk, profile=Profile(symbol=cfg.data.symbol), memory_len=cfg.agent.memory_len,
                             grounded=spec.grounded, kappa=cfg.grounding.strength, text_weight=cfg.agent.text_weight, adaptive_trust=cfg.agent.adaptive_trust)
 
