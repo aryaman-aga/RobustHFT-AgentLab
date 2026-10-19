@@ -42,6 +42,7 @@ import numpy as np
 import pandas as pd
 
 from ..agent import LLMPolicy, Perceiver, PortfolioState, Profile, RiskLayer, RulePolicy, SurrogatePolicy, TradingAgent
+from ..agent.llm_reader import LLMTextScorer
 from ..backtest import Backtester
 from ..config import Config
 from ..data.synth import SynthConfig, generate_synthetic_dataset
@@ -155,6 +156,25 @@ class Simulation:
         # the evaluation window. Fitting on the whole corpus let future articles' vocabulary/IDF move
         # earlier decisions -- lookahead through text (tests/test_text_nolookahead.py).
         self.text_background = dataset.news.loc[dataset.news["date"].astype(str) < dataset.dates[self.t0], "text"].tolist()
+        self._llm = None  # one LLM client per simulation, shared by every agent (built on first use)
+        self._reader: LLMTextScorer | None = None  # reader mode: one text -> score function, shared
+
+    # -- LLM plumbing --------------------------------------------------------
+    def llm_client(self):
+        if self._llm is None:
+            self._llm = build_client(self.cfg.llm)
+        return self._llm
+
+    def reader(self) -> LLMTextScorer:
+        """Shared reader-mode scorer; a pure text -> score map, so sharing it cannot couple agents."""
+        if self._reader is None:
+            self._reader = LLMTextScorer(self.llm_client())
+        return self._reader
+
+    def llm_stats(self) -> dict | None:
+        if self._reader is not None:
+            return self._reader.stats()
+        return self._llm.stats() if self._llm is not None else None
 
     # -- builders ----------------------------------------------------------
     def _agent(self, cfg: Config, spec: RunSpec) -> TradingAgent:
@@ -164,10 +184,10 @@ class Simulation:
         ev = EvidenceBuilder(self.ds.feats, zc, micro=spec.micro, window=cfg.grounding.window, horizon=cfg.grounding.horizon, top_k=cfg.grounding.top_k) if spec.grounded else None
         if cfg.agent.mode == "rule":
             policy = RulePolicy(cfg.agent.action_threshold)
-        elif cfg.agent.mode == "llm":
-            policy = LLMPolicy(build_client(cfg.llm), SurrogatePolicy(cfg.agent.action_threshold))
-        else:
-            policy = SurrogatePolicy(cfg.agent.action_threshold)
+        elif cfg.agent.mode == "llm":  # decider mode: the LLM picks the action
+            policy = LLMPolicy(self.llm_client(), SurrogatePolicy(cfg.agent.action_threshold))
+        else:  # surrogate policy; reader mode swaps the lexicon for an LLM text scorer
+            policy = SurrogatePolicy(cfg.agent.action_threshold, scorer=self.reader() if cfg.agent.text_scorer == "llm" else None)
         r = cfg.risk
         risk = RiskLayer(enabled=spec.risk, max_position=r.max_position, vol_target=r.vol_target, stop_loss=r.stop_loss, take_profit=r.take_profit,
                          hold_on_conflict=r.hold_on_conflict, conflict_threshold=r.conflict_threshold, min_confidence=r.min_confidence,
@@ -270,6 +290,7 @@ class Simulation:
             "position": state.shares, "cash": state.cash, "equity": state.equity, "daily_return": state.equity / eq0 - 1.0 if eq0 > 0 else 0.0,
             "retrieved_ids": d.retrieved_ids, "retrieved_provenance": d.retrieved_provenance, "retrieved_strategies": strategies,
             "visible_synthetic_frac": vis_syn, "bias": bias, "risk_overrides": d.risk_overrides, "rationale": d.rationale,
+            "parse_failed": d.parse_failed,
         }
 
 

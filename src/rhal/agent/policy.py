@@ -1,19 +1,23 @@
 """Decision policies.
 
 RulePolicy      : ignores text; acts on market evidence only (technical baseline).
-SurrogatePolicy : deterministic mock-LLM. Reads retrieved docs through the lexicon
-                  scorer, applies the day's BiasConfig as explicit parameter shifts,
-                  fuses with market evidence, and (if grounded) shrinks inconsistent
-                  text toward market evidence:
+SurrogatePolicy : deterministic mock-LLM. Reads retrieved docs through a text scorer (the
+                  finance lexicon, or an LLM in reader mode -- llm_reader.py), applies the
+                  day's BiasConfig as explicit parameter shifts, fuses with market evidence,
+                  and (if grounded) shrinks inconsistent text toward market evidence:
                       s_g = s - kappa * (1 - c) * (s - s_mkt)
-LLMPolicy       : builds the prompt (Perception + Profile + Memory + Evidence + docs),
-                  calls the provider, parses JSON; falls back to the surrogate on failure.
+LLMPolicy       : decider mode. Builds the prompt (Perception + Profile + Memory + Evidence +
+                  docs), asks the LLM for schema-checked JSON {action, confidence, news_stance,
+                  rationale}. The LLM's own news_stance is the text signal (so the risk layer
+                  and memory never see lexicon numbers). Connection errors raise; an unreadable
+                  answer becomes Hold and is flagged (parse_failed -> metric parse_fail_rate).
 """
 from __future__ import annotations
 
 import json
 import re
 from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
 
@@ -36,6 +40,7 @@ class PolicyOutput:
     consistency: float
     threshold: float
     rationale: str
+    parse_failed: bool = False  # decider mode: the LLM answer could not be read
 
 
 def _basic_market_read(obs: Observation) -> float:
@@ -54,14 +59,15 @@ class RulePolicy:
 
 
 class SurrogatePolicy:
-    def __init__(self, threshold: float = 0.15):
+    def __init__(self, threshold: float = 0.15, scorer: Callable[[str], float] | None = None):
         self.base_threshold = threshold
+        self.scorer = scorer or score_sentiment  # lexicon by default; LLMTextScorer in reader mode
 
     # -- text signal with bias operators -------------------------------------
     def text_signal(self, obs: Observation, bias: BiasConfig, memory: AgentMemory) -> float:
         if not obs.docs:
             return 0.0
-        scores = np.array([score_sentiment(d.item.text) for d in obs.docs])
+        scores = np.array([self.scorer(d.item.text) for d in obs.docs])
         w = np.array([max(d.score, 1e-6) for d in obs.docs])
         last = memory.last_action()
         if bias.confirm_weight > 0 and last is not None and last != Action.HOLD:
@@ -98,10 +104,37 @@ class SurrogatePolicy:
         return PolicyOutput(a, conf, float(s), s_text, s_mkt, c, thr, rat)
 
 
+DECIDER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "action": {"type": "string", "enum": ["Buy", "Sell", "Hold"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "news_stance": {"type": "number", "minimum": -1, "maximum": 1},
+        "rationale": {"type": "string"},
+    },
+    "required": ["action", "confidence", "news_stance", "rationale"],
+}
+
+
+def _parse_json(text: str) -> dict:
+    """JSON object from a reply; tolerates code fences or prose around it (API providers)."""
+    try:
+        obj = json.loads(text)
+    except ValueError:
+        m = re.search(r"\{.*\}", text, re.S)
+        if not m:
+            raise
+        obj = json.loads(m.group(0))
+    if not isinstance(obj, dict):
+        raise ValueError("reply is not a JSON object")
+    return obj
+
+
 class LLMPolicy:
-    def __init__(self, client: LLMClient, fallback: SurrogatePolicy):
+    def __init__(self, client: LLMClient, fallback: SurrogatePolicy, max_tokens: int = 160):
         self.client = client
-        self.fallback = fallback
+        self.fallback = fallback  # only supplies the action threshold
+        self.max_tokens = max_tokens
 
     def build_prompt(self, obs: Observation, profile: Profile, memory: AgentMemory, grounded: bool) -> tuple[str, str]:
         sys_p = profile.system_prompt(grounded)
@@ -116,16 +149,18 @@ class LLMPolicy:
         return sys_p, "\n".join(lines)
 
     def decide(self, obs: Observation, profile: Profile, memory: AgentMemory, *, grounded: bool, kappa: float, text_weight: float, adaptive_trust: bool) -> PolicyOutput:
-        sur = self.fallback.decide(obs, profile, memory, grounded=grounded, kappa=kappa, text_weight=text_weight, adaptive_trust=adaptive_trust)
+        thr = self.fallback.base_threshold * profile.bias.threshold_scale
+        s_mkt = obs.evidence.market_signal if (grounded and obs.evidence) else _basic_market_read(obs)
         sys_p, user = self.build_prompt(obs, profile, memory, grounded)
+        r = self.client.complete(sys_p, user, max_tokens=self.max_tokens, schema=DECIDER_SCHEMA)  # network errors propagate
         try:
-            r = self.client.complete(sys_p, user)
-            m = re.search(r"\{.*\}", r.text, re.S)
-            obj = json.loads(m.group(0)) if m else {}
-            a = Action(obj.get("action", "Hold").capitalize())
-            conf = float(np.clip(float(obj.get("confidence", 0.5)), 0, 1))
-            rat = str(obj.get("rationale", ""))[:300]
-        except Exception as e:  # malformed output -> conservative hold, keep surrogate diagnostics
-            a, conf, rat = Action.HOLD, 0.0, f"parse-failure fallback: {e}"
+            obj = _parse_json(r.text)
+            a = Action(str(obj["action"]).strip().capitalize())
+            conf = float(np.clip(float(obj["confidence"]), 0, 1))
+            stance = float(np.clip(float(obj["news_stance"]), -1, 1))
+            rat, failed = str(obj.get("rationale", ""))[:300], False
+        except (ValueError, KeyError, TypeError) as e:  # unreadable answer -> conservative Hold, flagged
+            a, conf, stance, rat, failed = Action.HOLD, 0.0, 0.0, f"parse-failure fallback: {e}", True
+        c = consistency_score(stance, s_mkt)  # the LLM's own reading of the news, not the lexicon's
         raw = a.sign * max(conf, 0.01)
-        return PolicyOutput(a, conf, raw, sur.text_signal, sur.market_signal, sur.consistency, sur.threshold, f"llm:{rat}")
+        return PolicyOutput(a, conf, raw, stance, s_mkt, c, thr, f"llm:{rat}", parse_failed=failed)

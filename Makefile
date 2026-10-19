@@ -2,7 +2,8 @@
 PY := .venv/bin/python
 PIP := $(PY) -m pip
 
-.PHONY: venv install install-optional data test test-fast pipeline ablation report frontend train-detector paper clean all
+.PHONY: venv install install-optional data test test-fast pipeline ablation report frontend train-detector paper clean all \
+        llm-setup llm-up llm-down llm-pull
 
 venv:
 	python3 -m venv .venv
@@ -46,6 +47,36 @@ frontend:
 paper:
 	cd paper && if command -v tectonic >/dev/null 2>&1; then tectonic main.tex; \
 	else pdflatex -interaction=nonstopmode main.tex && bibtex main && pdflatex -interaction=nonstopmode main.tex && pdflatex -interaction=nonstopmode main.tex; fi
+
+# --- Local LLM (Ollama), installed INSIDE .venv: binary, models and state all live under .venv/ollama ---
+# make llm-setup  -> pinned Ollama build, checksum-verified (scripts/setup_ollama.sh)
+# make llm-up     -> server on 127.0.0.1:11434 in the background (pid + log in .venv/ollama/)
+# make llm-pull   -> pull LLM_MODELS into .venv/ollama/models
+# make llm-down   -> stop the server
+OLLAMA := .venv/bin/ollama
+OLLAMA_DIR := .venv/ollama
+LLM_MODELS ?= qwen2.5:7b llama3.2:3b
+
+llm-setup:
+	bash scripts/setup_ollama.sh
+
+llm-up:
+	@test -x $(OLLAMA) || { echo "run 'make llm-setup' first"; exit 1; }
+	@if [ -f $(OLLAMA_DIR)/server.pid ] && kill -0 $$(cat $(OLLAMA_DIR)/server.pid) 2>/dev/null; then \
+		echo "ollama already running (pid $$(cat $(OLLAMA_DIR)/server.pid))"; \
+	else \
+		nohup $(OLLAMA) serve > $(OLLAMA_DIR)/server.log 2>&1 & echo $$! > $(OLLAMA_DIR)/server.pid; \
+		curl -fs --retry 30 --retry-connrefused --retry-delay 1 http://127.0.0.1:11434/api/tags > /dev/null \
+			&& echo "ollama up on 127.0.0.1:11434 (pid $$(cat $(OLLAMA_DIR)/server.pid))" \
+			|| { echo "ollama did not start; see $(OLLAMA_DIR)/server.log"; exit 1; }; \
+	fi
+
+llm-down:
+	@if [ -f $(OLLAMA_DIR)/server.pid ]; then kill $$(cat $(OLLAMA_DIR)/server.pid) 2>/dev/null || true; \
+		rm -f $(OLLAMA_DIR)/server.pid; echo "ollama stopped"; else echo "ollama is not running"; fi
+
+llm-pull:
+	@for m in $(LLM_MODELS); do $(OLLAMA) pull $$m || exit 1; done
 
 # Full happy path from a fresh clone
 all: install data train-detector test pipeline ablation report frontend

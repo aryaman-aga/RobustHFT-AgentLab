@@ -19,7 +19,8 @@ class Profile:
             "You are a simulated financial trading agent inside a research sandbox. This is not investment advice.",
             self.task,
             self.asset_context,
-            "Respond ONLY with JSON: {\"action\": \"Buy|Sell|Hold\", \"confidence\": 0-1, \"rationale\": \"...\"}.",
+            "Respond ONLY with JSON: {\"action\": \"Buy|Sell|Hold\", \"confidence\": 0-1, "
+            "\"news_stance\": -1..1 (what the retrieved news implies for the price), \"rationale\": \"one short sentence\"}.",
         ]
         if grounded:
             parts.append("Structured historical market evidence is provided; weigh textual claims against it and be cautious when they conflict.")

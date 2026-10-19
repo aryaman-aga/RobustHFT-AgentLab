@@ -43,7 +43,6 @@ retrieval:
 
 misgen:
   enabled: true
-  mode: mock                   # mock | llm   (llm requires provider != mock)
   bias_prob: 0.7               # p in Algorithm 1
   use_bias: true
   use_minor: true
@@ -59,7 +58,8 @@ misgen:
   placebo: false               # if true, inject benign paraphrases (noise-floor control)
 
 agent:
-  mode: mock                   # rule | mock | llm
+  mode: mock                   # rule | mock | llm   (mock = transparent surrogate; llm = the LLM picks the action)
+  text_scorer: lexicon         # lexicon | llm   (llm = the LLM reads each news item; the defense layer is unchanged)
   action_threshold: 0.15       # |signal| above which the agent acts
   text_weight: 0.75            # ungrounded agent leans on text (mirrors LLM overreaction)
   memory_len: 5

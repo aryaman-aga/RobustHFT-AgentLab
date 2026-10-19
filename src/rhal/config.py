@@ -12,17 +12,27 @@ from pathlib import Path
 from typing import Any, Literal, Mapping, Optional
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .utils.io import load_yaml
 
 
-class IntradayCfg(BaseModel):
+class _Section(BaseModel):
+    """Base for every config section: unknown keys are an error.
+
+    Without this, a mistyped YAML key or ``--set`` override (``defense.detect_filtr=true``) was
+    silently dropped and the "ablation" ran the baseline configuration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IntradayCfg(_Section):
     enabled: bool = False
     bars_per_day: int = 78
 
 
-class DataCfg(BaseModel):
+class DataCfg(_Section):
     source: Literal["synthetic", "csv", "yfinance"] = "synthetic"
     csv_prices: str = "data/sample/prices.csv"
     csv_news: str = "data/sample/news.csv"
@@ -33,13 +43,13 @@ class DataCfg(BaseModel):
     intraday: IntradayCfg = IntradayCfg()
 
 
-class MicroCfg(BaseModel):
+class MicroCfg(_Section):
     enabled: bool = True
     rv_window: int = 5
     volume_window: int = 20
 
 
-class FeaturesCfg(BaseModel):
+class FeaturesCfg(_Section):
     vol_window: int = 5
     drawdown_window: int = 20
     short_trend: int = 5
@@ -48,7 +58,7 @@ class FeaturesCfg(BaseModel):
     micro: MicroCfg = MicroCfg()
 
 
-class GroundingCfg(BaseModel):
+class GroundingCfg(_Section):
     enabled: bool = True
     window: int = 30
     top_k: int = 5
@@ -56,16 +66,15 @@ class GroundingCfg(BaseModel):
     strength: float = Field(0.7, ge=0.0, le=1.0)
 
 
-class RetrievalCfg(BaseModel):
+class RetrievalCfg(_Section):
     method: Literal["tfidf", "bm25", "embed"] = "tfidf"
     top_k: int = 4
     recency_days: int = 3
     recency_decay: float = 0.5
 
 
-class MisGenCfg(BaseModel):
+class MisGenCfg(_Section):
     enabled: bool = True
-    mode: Literal["mock", "llm"] = "mock"
     bias_prob: float = 0.7
     use_bias: bool = True
     use_minor: bool = True
@@ -81,8 +90,9 @@ class MisGenCfg(BaseModel):
     placebo: bool = False
 
 
-class AgentCfg(BaseModel):
-    mode: Literal["rule", "mock", "llm"] = "mock"
+class AgentCfg(_Section):
+    mode: Literal["rule", "mock", "llm"] = "mock"  # mock = transparent surrogate policy; llm = the LLM picks the action
+    text_scorer: Literal["lexicon", "llm"] = "lexicon"  # who reads each news item for the surrogate policy (llm = reader mode)
     action_threshold: float = 0.15
     text_weight: float = 0.75
     memory_len: int = 5
@@ -90,7 +100,7 @@ class AgentCfg(BaseModel):
     adaptive_trust: bool = False  # long-term memory modulates text reliance (ablation knob)
 
 
-class RiskCfg(BaseModel):
+class RiskCfg(_Section):
     enabled: bool = True
     max_position: float = 1.0
     vol_target: float = 0.015
@@ -102,29 +112,30 @@ class RiskCfg(BaseModel):
     drawdown_throttle: float = 0.10
 
 
-class BacktestCfg(BaseModel):
+class BacktestCfg(_Section):
     initial_cash: float = 100_000.0
     fee_bps: float = 10.0
     slippage_bps: float = 5.0
     execution: Literal["next_open", "same_close"] = "next_open"
 
 
-class ExperimentCfg(BaseModel):
+class ExperimentCfg(_Section):
     n_seeds: int = 100
     counterfactual_asr: bool = True  # also compute the one-step counterfactual ASR (+1 agent step/day: 3 LLM calls/day instead of 2 in llm mode)
 
 
-class LLMCfg(BaseModel):
+class LLMCfg(_Section):
     """Populated from environment (.env); never from YAML so keys stay out of configs."""
 
-    provider: Literal["mock", "anthropic", "openai"] = "mock"
+    provider: Literal["mock", "anthropic", "openai", "ollama"] = "mock"
     model: str = "claude-haiku-4-5-20251001"
     cache_dir: str = "outputs/llm_cache"
     api_key: Optional[str] = None
-    base_url: Optional[str] = None
+    base_url: Optional[str] = None  # openai: OpenAI-compatible endpoint; ollama: local server (loopback only)
+    timeout: float = 600.0  # seconds per request (a local 7B model can be slow on CPU/Metal)
 
 
-class Config(BaseModel):
+class Config(_Section):
     seed: int = 42
     output_dir: str = "outputs"
     data: DataCfg = DataCfg()
@@ -156,11 +167,14 @@ def _set_dotted(d: dict, dotted: str, value: Any) -> None:
     cur[parts[-1]] = value
 
 
+LLM_PROVIDERS = ("mock", "anthropic", "openai", "ollama")
+
+
 def _llm_from_env() -> LLMCfg:
     load_dotenv(override=False)
     provider = os.getenv("RHAL_LLM_PROVIDER", "mock").strip().lower() or "mock"
-    if provider not in ("mock", "anthropic", "openai"):
-        provider = "mock"
+    if provider not in LLM_PROVIDERS:  # a typo used to become "mock" silently, so every LLM decision was fake
+        raise ValueError(f"RHAL_LLM_PROVIDER={provider!r} is not one of {LLM_PROVIDERS}")
     key = None
     base_url = None
     if provider == "anthropic":
@@ -168,9 +182,13 @@ def _llm_from_env() -> LLMCfg:
     elif provider == "openai":
         key = os.getenv("OPENAI_API_KEY") or None
         base_url = os.getenv("OPENAI_BASE_URL") or None
+    elif provider == "ollama":  # local server installed inside .venv (make llm-setup); no key
+        host = os.getenv("OLLAMA_HOST", "127.0.0.1:11434").strip()
+        base_url = host if host.startswith("http") else f"http://{host}"
+    default_model = "qwen2.5:7b" if provider == "ollama" else "claude-haiku-4-5-20251001"
     return LLMCfg(
         provider=provider,  # type: ignore[arg-type]
-        model=os.getenv("RHAL_LLM_MODEL", "claude-haiku-4-5-20251001"),
+        model=os.getenv("RHAL_LLM_MODEL", "").strip() or default_model,
         cache_dir=os.getenv("RHAL_LLM_CACHE_DIR", "outputs/llm_cache"),
         api_key=key,
         base_url=base_url,

@@ -74,6 +74,7 @@ class Decision(BaseModel):
     retrieved_ids: list[str] = Field(default_factory=list)
     retrieved_provenance: list[str] = Field(default_factory=list)
     risk_overrides: list[str] = Field(default_factory=list)
+    parse_failed: bool = False  # decider mode: the LLM answer could not be read (became Hold)
 
 
 class BiasConfig(BaseModel):

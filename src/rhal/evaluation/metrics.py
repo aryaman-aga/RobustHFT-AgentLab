@@ -103,4 +103,7 @@ def compute_metrics(treated: list[dict], shadow: list[dict], initial_cash: float
     clean = portfolio_metrics(shadow, initial_cash)
     m["CR_clean_paired"] = clean.get("CR", 0.0)
     m["CR_delta_vs_clean"] = m.get("CR", 0.0) - clean.get("CR", 0.0)
+    both = treated + shadow
+    if both and all("parse_failed" in s for s in both):  # decider mode: share of unreadable LLM answers
+        m["parse_fail_rate"] = float(np.mean([bool(s["parse_failed"]) for s in both]))
     return m
