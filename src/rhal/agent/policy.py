@@ -58,10 +58,29 @@ class RulePolicy:
         return PolicyOutput(a, min(1.0, abs(s_mkt)), s_mkt, 0.0, s_mkt, 1.0, self.threshold, "rule: market evidence only")
 
 
+def weighted_median(x: np.ndarray, w: np.ndarray) -> float:
+    """Smallest value whose cumulative weight reaches half; ties broken by position (stable)."""
+    order = np.argsort(x, kind="stable")
+    cw = np.cumsum(w[order])
+    return float(x[order][np.searchsorted(cw, 0.5 * cw[-1])])
+
+
+def weighted_trimmed_mean(x: np.ndarray, w: np.ndarray, trim: float) -> float:
+    """Weighted mean after removing ``trim`` of the total weight from each tail."""
+    order = np.argsort(x, kind="stable")
+    xs, ws = x[order], w[order] / w.sum()
+    hi = np.cumsum(ws)
+    lo = hi - ws
+    kept = np.clip(np.minimum(hi, 1 - trim) - np.maximum(lo, trim), 0.0, None)  # weight of each item inside [trim, 1-trim]
+    return float(np.sum(kept * xs) / kept.sum()) if kept.sum() > 0 else weighted_median(x, w)
+
+
 class SurrogatePolicy:
-    def __init__(self, threshold: float = 0.15, scorer: Callable[[str], float] | None = None):
+    def __init__(self, threshold: float = 0.15, scorer: Callable[[str], float] | None = None, text_agg: str = "mean", trim_frac: float = 0.25):
         self.base_threshold = threshold
         self.scorer = scorer or score_sentiment  # lexicon by default; LLMTextScorer in reader mode
+        self.text_agg = text_agg  # mean (paper) | median | trimmed: robust-aggregation baseline
+        self.trim_frac = trim_frac
 
     # -- text signal with bias operators -------------------------------------
     def text_signal(self, obs: Observation, bias: BiasConfig, memory: AgentMemory) -> float:
@@ -74,7 +93,12 @@ class SurrogatePolicy:
             agree = np.sign(scores) == last.sign
             w = w * (1 + bias.confirm_weight * agree)
         w = w / w.sum()
-        s = float(np.sum(w * scores))
+        if self.text_agg == "median":
+            s = weighted_median(scores, w)
+        elif self.text_agg == "trimmed":
+            s = weighted_trimmed_mean(scores, w, self.trim_frac)
+        else:
+            s = float(np.sum(w * scores))
         if bias.downside_weight != 1.0 and s < 0:
             s *= bias.downside_weight
         if bias.anchor_weight > 0:

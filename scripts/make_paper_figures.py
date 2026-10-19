@@ -51,7 +51,7 @@ def stats_for(root: Path) -> pd.DataFrame:
     frames = []
     pipe = pd.read_csv(root / "pipeline" / "pipeline_runs.csv")
     frames += [compare(pipe, main_comparisons()), compare(pipe, control_comparisons())]
-    for group in ("attack", "defense", "retrieval", "grounding_strength"):
+    for group in ("attack", "defense", "retrieval", "grounding_strength", "baselines", "aware_attack"):
         f = root / "ablation" / group / f"ablation_{group}_runs.csv"
         if f.exists():
             frames.append(compare(pd.read_csv(f), ablation_comparisons(group)))

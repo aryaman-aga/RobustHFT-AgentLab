@@ -88,16 +88,29 @@ class MisGenCfg(_Section):
     det_threshold: Optional[float] = None  # None -> use detector's calibrated threshold
     injection_ratio: float = 1.0
     placebo: bool = False
+    # defense-aware attacker: among acceptable edits, prefer the one whose sentiment agrees with
+    # ("aligned", evades grounding) or opposes ("conflict", triggers hold-on-conflict) the public
+    # market evidence of the day. "none" = paper's attacker (first acceptable candidate).
+    evidence_aware: Literal["none", "aligned", "conflict"] = "none"
 
 
 class AgentCfg(_Section):
     mode: Literal["rule", "mock", "llm"] = "mock"  # mock = transparent surrogate policy; llm = the LLM picks the action
     text_scorer: Literal["lexicon", "llm"] = "lexicon"  # who reads each news item for the surrogate policy (llm = reader mode)
     action_threshold: float = 0.15
+    text_agg: Literal["mean", "median", "trimmed"] = "mean"  # how retrieved-document scores are pooled (baseline B3)
+    trim_frac: float = Field(0.25, ge=0.0, lt=0.5)  # weight trimmed from each tail when text_agg=trimmed
     text_weight: float = 0.75
     memory_len: int = 5
     reflection: bool = True
     adaptive_trust: bool = False  # long-term memory modulates text reliance (ablation knob)
+
+
+class DefenseCfg(_Section):
+    """Baseline defenses compared against grounding."""
+
+    detect_filter: bool = False  # drop retrieved docs the detectability model flags (baseline B2)
+    detect_fpr: float = Field(0.10, gt=0.0, lt=1.0)  # flag rate on clean pre-window news that sets the threshold
 
 
 class RiskCfg(_Section):
@@ -145,6 +158,7 @@ class Config(_Section):
     misgen: MisGenCfg = MisGenCfg()
     agent: AgentCfg = AgentCfg()
     risk: RiskCfg = RiskCfg()
+    defense: DefenseCfg = DefenseCfg()
     backtest: BacktestCfg = BacktestCfg()
     experiment: ExperimentCfg = ExperimentCfg()
     llm: LLMCfg = LLMCfg()

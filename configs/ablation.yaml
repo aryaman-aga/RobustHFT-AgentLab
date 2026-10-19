@@ -24,3 +24,21 @@ ablations:
     kappa_0.3: {grounding.strength: 0.3}
     kappa_0.7: {grounding.strength: 0.7}
     kappa_1.0: {grounding.strength: 1.0}
+  baselines:                 # standard alternatives to grounding (no risk layer), each with its own placebo and frozen replay
+    none:               {grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+    grounding:          {grounding.enabled: true,  risk.enabled: false, features.micro.enabled: true}
+    text_free:          {agent.mode: rule, grounding.enabled: true, risk.enabled: false, features.micro.enabled: true}
+    detect_10:          {defense.detect_filter: true, defense.detect_fpr: 0.10, grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+    detect_25:          {defense.detect_filter: true, defense.detect_fpr: 0.25, grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+    median:             {agent.text_agg: median, grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+    trimmed:            {agent.text_agg: trimmed, grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+    none_nofilter:      {misgen.use_filter: false, grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+    detect_25_nofilter: {misgen.use_filter: false, defense.detect_filter: true, defense.detect_fpr: 0.25, grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+  aware_attack:              # an attacker that reads the same public market evidence the defense uses
+    none:               {grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+    grounding:          {grounding.enabled: true,  risk.enabled: false, features.micro.enabled: true}
+    full:               {grounding.enabled: true,  risk.enabled: true,  features.micro.enabled: true}
+    none_aligned:       {misgen.evidence_aware: aligned, grounding.enabled: false, risk.enabled: false, features.micro.enabled: false}
+    grounding_aligned:  {misgen.evidence_aware: aligned, grounding.enabled: true, risk.enabled: false, features.micro.enabled: true}
+    full_aligned:       {misgen.evidence_aware: aligned, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}
+    full_conflict:      {misgen.evidence_aware: conflict, grounding.enabled: true, risk.enabled: true, features.micro.enabled: true}

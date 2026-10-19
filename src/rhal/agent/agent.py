@@ -55,7 +55,7 @@ class TradingAgent:
             date=obs.date, action=action, confidence=out.confidence, raw_signal=out.raw_signal, text_signal=out.text_signal,
             market_signal=out.market_signal, consistency=out.consistency, target_position=target, rationale=out.rationale,
             retrieved_ids=obs.retrieved_ids, retrieved_provenance=obs.retrieved_provenance, risk_overrides=overrides,
-            parse_failed=out.parse_failed,
+            parse_failed=out.parse_failed, filter_visible=obs.filter_visible, filter_dropped=obs.filter_dropped,
         )
 
     def observe_return(self, realized_return: float) -> None:

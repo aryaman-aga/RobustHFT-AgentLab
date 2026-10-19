@@ -158,6 +158,36 @@ class Simulation:
         self.text_background = dataset.news.loc[dataset.news["date"].astype(str) < dataset.dates[self.t0], "text"].tolist()
         self._llm = None  # one LLM client per simulation, shared by every agent (built on first use)
         self._reader: LLMTextScorer | None = None  # reader mode: one text -> score function, shared
+        self._filters: dict[float, object] = {}  # detection baseline: one filter per flag rate
+        self.filter_thresholds: dict[float, float] = {}  # flag rate -> detector threshold (from pre-window news)
+        self._det_scores: dict[str, float] = {}  # detector score per text (filters share it)
+        self._attacker_ev: EvidenceBuilder | None = None  # defense-aware attacker's view of the market
+
+    # -- baselines and the defense-aware attacker ----------------------------------
+    def detect_filter(self, fpr: float):
+        """Keep-predicate for retrieval: drop docs the detector flags. The threshold is the (1-fpr)
+        quantile of detector scores on clean news dated before the evaluation window (no lookahead)."""
+        if fpr not in self._filters:
+            thr = float(np.quantile(self.det.predict_proba(self.text_background), 1.0 - fpr))
+            self.filter_thresholds[fpr] = thr
+            scores = self._det_scores
+
+            def keep(item: NewsItem) -> bool:
+                if item.text not in scores:
+                    scores[item.text] = self.det.score(item.text)
+                return scores[item.text] <= thr
+
+            self._filters[fpr] = keep
+        return self._filters[fpr]
+
+    def attacker_market_signal(self, t: int) -> float:
+        """Public market evidence at day t (prices up to t only) as the defense-aware attacker sees it.
+        One fixed builder for every arm, so the attacker's view does not depend on the defense."""
+        if self._attacker_ev is None:
+            c = self.cfg.grounding
+            self._attacker_ev = EvidenceBuilder(self.ds.feats, ["z_" + k for k in feature_columns(True)], micro=True,
+                                                window=c.window, horizon=c.horizon, top_k=c.top_k)
+        return self._attacker_ev.build(t).market_signal
 
     # -- LLM plumbing --------------------------------------------------------
     def llm_client(self):
@@ -179,7 +209,9 @@ class Simulation:
     # -- builders ----------------------------------------------------------
     def _agent(self, cfg: Config, spec: RunSpec) -> TradingAgent:
         zc = ["z_" + c for c in feature_columns(spec.micro)]
-        retr = Retriever(cfg.retrieval.method, cfg.retrieval.top_k, cfg.retrieval.recency_days, cfg.retrieval.recency_decay, background=self.text_background)
+        doc_filter = self.detect_filter(cfg.defense.detect_fpr) if cfg.defense.detect_filter else None
+        retr = Retriever(cfg.retrieval.method, cfg.retrieval.top_k, cfg.retrieval.recency_days, cfg.retrieval.recency_decay, background=self.text_background,
+                         doc_filter=doc_filter)
         perc = Perceiver(self.ds.feats, retr, self.ds.dates)
         ev = EvidenceBuilder(self.ds.feats, zc, micro=spec.micro, window=cfg.grounding.window, horizon=cfg.grounding.horizon, top_k=cfg.grounding.top_k) if spec.grounded else None
         if cfg.agent.mode == "rule":
@@ -187,7 +219,8 @@ class Simulation:
         elif cfg.agent.mode == "llm":  # decider mode: the LLM picks the action
             policy = LLMPolicy(self.llm_client(), SurrogatePolicy(cfg.agent.action_threshold))
         else:  # surrogate policy; reader mode swaps the lexicon for an LLM text scorer
-            policy = SurrogatePolicy(cfg.agent.action_threshold, scorer=self.reader() if cfg.agent.text_scorer == "llm" else None)
+            policy = SurrogatePolicy(cfg.agent.action_threshold, scorer=self.reader() if cfg.agent.text_scorer == "llm" else None,
+                                     text_agg=cfg.agent.text_agg, trim_frac=cfg.agent.trim_frac)
         r = cfg.risk
         risk = RiskLayer(enabled=spec.risk, max_position=r.max_position, vol_target=r.vol_target, stop_loss=r.stop_loss, take_profit=r.take_profit,
                          hold_on_conflict=r.hold_on_conflict, conflict_threshold=r.conflict_threshold, min_confidence=r.min_confidence,
@@ -209,6 +242,7 @@ class Simulation:
             use_feedback=m.use_feedback, alpha=m.alpha, delta=m.delta, max_tries=m.max_tries, tau_sim=m.sim_threshold, tau_det=m.det_threshold,
             injection_ratio=1.0 if matched else m.injection_ratio,  # matched: paraphrase exactly the tape's items
             placebo=(spec.injection != "misgen"),
+            evidence_aware=m.evidence_aware if spec.injection == "misgen" else "none",
         )
 
     # -- main loop ---------------------------------------------------------
@@ -239,7 +273,8 @@ class Simulation:
                 bias_name = bias.name
                 treated.set_bias(bias)
                 today_clean = [it for it in shadow_pool.items() if it.date == date]
-                injected = misgen.generate_for_items(today_clean, date)
+                s_mkt = self.attacker_market_signal(t) if spec.injection == "misgen" and cfg.misgen.evidence_aware != "none" else None
+                injected = misgen.generate_for_items(today_clean, date, s_mkt=s_mkt)
                 treated_pool.extend(injected)
                 if recorded is not None:
                     recorded.docs[date], recorded.bias[date] = injected, bias_name
@@ -290,7 +325,7 @@ class Simulation:
             "position": state.shares, "cash": state.cash, "equity": state.equity, "daily_return": state.equity / eq0 - 1.0 if eq0 > 0 else 0.0,
             "retrieved_ids": d.retrieved_ids, "retrieved_provenance": d.retrieved_provenance, "retrieved_strategies": strategies,
             "visible_synthetic_frac": vis_syn, "bias": bias, "risk_overrides": d.risk_overrides, "rationale": d.rationale,
-            "parse_failed": d.parse_failed,
+            "parse_failed": d.parse_failed, "filter_visible": d.filter_visible, "filter_dropped": d.filter_dropped,
         }
 
 

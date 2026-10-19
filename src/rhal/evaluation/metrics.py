@@ -104,6 +104,12 @@ def compute_metrics(treated: list[dict], shadow: list[dict], initial_cash: float
     m["CR_clean_paired"] = clean.get("CR", 0.0)
     m["CR_delta_vs_clean"] = m.get("CR", 0.0) - clean.get("CR", 0.0)
     both = treated + shadow
+    vis = [p for s in both for p in s.get("filter_visible", [])]
+    if vis:  # detection baseline: share of visible doc-days dropped, by provenance
+        drop = [p for s in both for p in s.get("filter_dropped", [])]
+        syn_vis = sum(p != "clean" for p in vis)
+        m["filter_recall"] = sum(p != "clean" for p in drop) / syn_vis if syn_vis else float("nan")
+        m["filter_clean_drop"] = sum(p == "clean" for p in drop) / max(sum(p == "clean" for p in vis), 1)
     if both and all("parse_failed" in s for s in both):  # decider mode: share of unreadable LLM answers
         m["parse_fail_rate"] = float(np.mean([bool(s["parse_failed"]) for s in both]))
     return m

@@ -56,11 +56,14 @@ misgen:
   det_threshold: null          # tau_det; null = detector's FPR-calibrated threshold
   injection_ratio: 1.0         # synthetic docs per clean doc
   placebo: false               # if true, inject benign paraphrases (noise-floor control)
+  evidence_aware: none         # none | aligned | conflict: defense-aware attacker (uses public market evidence <= t)
 
 agent:
   mode: mock                   # rule | mock | llm   (mock = transparent surrogate; llm = the LLM picks the action)
   text_scorer: lexicon         # lexicon | llm   (llm = the LLM reads each news item; the defense layer is unchanged)
   action_threshold: 0.15       # |signal| above which the agent acts
+  text_agg: mean               # mean | median | trimmed: pooling of retrieved-document scores (robust-aggregation baseline)
+  trim_frac: 0.25              # weight trimmed from each tail when text_agg=trimmed
   text_weight: 0.75            # ungrounded agent leans on text (mirrors LLM overreaction)
   memory_len: 5
   reflection: true
@@ -76,6 +79,10 @@ risk:
   conflict_threshold: 0.6      # consistency below this -> hold (|text-market| > 0.8)
   min_confidence: 0.3
   drawdown_throttle: 0.10      # halve size when DD exceeds this
+
+defense:                     # baseline defenses compared against grounding
+  detect_filter: false         # drop retrieved docs the detectability model flags
+  detect_fpr: 0.10             # threshold = this flag rate on clean news dated before the evaluation window
 
 backtest:
   initial_cash: 100000.0

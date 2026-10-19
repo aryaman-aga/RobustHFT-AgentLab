@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ..agent.sentiment import score_sentiment
 from ..schemas import BiasConfig, NewsItem
 from ..seeding import rng
 from .detector import DetectabilityModel
@@ -73,6 +74,7 @@ class MisGenEngine:
         tau_det: float | None = None,
         injection_ratio: float = 1.0,
         placebo: bool = False,
+        evidence_aware: str = "none",
     ):
         self.seed = seed  # all draws come from rng(seed, <purpose>, date[, item_id]); see module docstring
         self.bias_prob = bias_prob
@@ -84,6 +86,10 @@ class MisGenEngine:
         self.max_tries = max_tries
         self.injection_ratio = injection_ratio
         self.placebo = placebo
+        # Defense-aware attacker (our extension): instead of the first acceptable candidate, try all
+        # max_tries and keep the one whose lexicon sentiment best agrees ("aligned") or disagrees
+        # ("conflict") with the day's public market evidence s_mkt. "none" = the paper's attacker.
+        self.evidence_aware = evidence_aware
         self.filter = QualityFilter(SimilarityEvaluator(background_corpus), detector, tau_sim, detector.threshold if tau_det is None else tau_det, enabled=use_filter)
         self.s_bias = StrategySampler(BIAS_TYPES, alpha, use_feedback)
         self.s_minor = StrategySampler(MINOR_TYPES, alpha, use_feedback)
@@ -102,8 +108,13 @@ class MisGenEngine:
         self._today_bias = self.s_bias.sample(g, cr=cr, delta=self.delta)
         return bias_config(self._today_bias)
 
-    def generate_for_items(self, items: list[NewsItem], date: str) -> list[NewsItem]:
-        """Produce synthetic variants for the given clean items (Algorithm 1 inner loop)."""
+    def generate_for_items(self, items: list[NewsItem], date: str, s_mkt: float | None = None) -> list[NewsItem]:
+        """Produce synthetic variants for the given clean items (Algorithm 1 inner loop).
+
+        ``s_mkt`` (public market evidence at this date, computed from data up to the date only) is
+        used by the defense-aware attacker; the paper's attacker ignores it.
+        """
+        aware = self.evidence_aware != "none" and s_mkt is not None
         out: list[NewsItem] = []
         n_target = int(round(self.injection_ratio * len(items)))
         if n_target <= 0:
@@ -119,6 +130,7 @@ class MisGenEngine:
                 out.append(self._mk(item, text, date, k, {"bias": None, "minor": "placebo", "rewrite": None}, "placebo"))
                 continue
             accepted = None
+            cands: list[tuple[str, dict, bool]] = []  # (text, strategy, via_rewrite); aware mode keeps them all
             for _ in range(self.max_tries):
                 self.stats.generated += 1
                 if self.use_minor:
@@ -132,23 +144,37 @@ class MisGenEngine:
                 self.stats.det_scores.append(d)
                 strat = {"bias": self._today_bias, "minor": m, "rewrite": None, "sim": round(s, 3), "det": round(d, 3)}
                 if ok_s and ok_d:
-                    accepted = (cand, strat)
-                    break
+                    cands.append((cand, strat, False))
+                    if not aware:
+                        break
+                    continue
                 if self.use_rewrite and ok_s:
                     r = self.s_rewrite.sample(g)
                     cand2 = apply_rewrite(cand, r, g)
                     s2, d2, ok_s2, ok_d2 = self.filter.evaluate(item.text, cand2)
                     self.stats.det_scores.append(d2)
                     if ok_d2 and ok_s2:
-                        accepted = (cand2, {**strat, "rewrite": r, "sim": round(s2, 3), "det": round(d2, 3)})
-                        self.stats.accepted_after_rewrite += 1
-                        break
+                        cands.append((cand2, {**strat, "rewrite": r, "sim": round(s2, 3), "det": round(d2, 3)}, True))
+                        if not aware:
+                            break
+            if cands:
+                text, strat, via_rewrite = self._choose(cands, s_mkt) if aware else cands[0]
+                accepted = (text, strat)
+                self.stats.accepted_after_rewrite += int(via_rewrite)
             if accepted is None:
                 self.stats.rejected += 1
                 continue
             self.stats.accepted += 1
             out.append(self._mk(item, accepted[0], date, k, accepted[1], "synthetic"))
         return out
+
+    def _choose(self, cands: list[tuple[str, dict, bool]], s_mkt: float) -> tuple[str, dict, bool]:
+        """Defense-aware pick: maximise (+/-) sign(s_mkt) * lexicon sentiment; first maximum wins."""
+        direction = float(np.sign(s_mkt)) * (1.0 if self.evidence_aware == "aligned" else -1.0)
+        align = [float(np.sign(s_mkt)) * score_sentiment(c[0]) for c in cands]
+        i = int(np.argmax([direction * a for a in align])) if direction != 0 else 0
+        text, strat, via = cands[i]
+        return text, {**strat, "aware": self.evidence_aware, "s_mkt": round(float(s_mkt), 3), "align": round(align[i], 3)}, via
 
     def _mk(self, src: NewsItem, text: str, date: str, k: int, strat: dict, prov: str) -> NewsItem:
         return NewsItem(

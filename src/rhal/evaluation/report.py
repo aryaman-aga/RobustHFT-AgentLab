@@ -13,7 +13,8 @@ import pandas as pd  # noqa: E402
 from ..utils.io import ensure_dir, save_csv  # noqa: E402
 from .stats import bootstrap_ci  # noqa: E402
 
-KEY_COLS = ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "ASR_given_exposed", "exposure_rate", "signal_deviation", "CR", "CR_clean_paired", "max_drawdown", "sharpe", "turnover", "hold_rate"]
+KEY_COLS = ["MER", "MER_lift", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "ASR_given_exposed", "exposure_rate", "signal_deviation", "CR", "CR_clean_paired", "CR_delta_vs_clean", "max_drawdown", "sharpe", "turnover", "hold_rate",
+            "filter_recall", "filter_clean_drop", "parse_fail_rate"]
 
 
 def aggregate(rows: list[dict], by: str = "arm") -> pd.DataFrame:

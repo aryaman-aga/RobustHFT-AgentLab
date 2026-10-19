@@ -19,6 +19,8 @@ class Observation:
     dd_20: float
     docs: list[RetrievedDoc] = field(default_factory=list)
     evidence: MarketEvidence | None = None
+    filter_visible: list[str] = field(default_factory=list)  # provenance of docs the detection filter saw
+    filter_dropped: list[str] = field(default_factory=list)  # ... and of those it dropped
 
     @property
     def retrieved_ids(self) -> list[str]:
@@ -43,4 +45,6 @@ class Perceiver:
             return 0.0 if v is None or pd.isna(v) else float(v)
 
         docs = self.retriever.retrieve(pool, query, str(row["date"]), self.all_dates)
-        return Observation(t=t, date=str(row["date"]), close=fv("close"), ret_1=fv("ret_1"), vol_5=fv("vol_5"), dd_20=fv("dd_20"), docs=docs, evidence=evidence)
+        fil = self.retriever.doc_filter is not None
+        return Observation(t=t, date=str(row["date"]), close=fv("close"), ret_1=fv("ret_1"), vol_5=fv("vol_5"), dd_20=fv("dd_20"), docs=docs, evidence=evidence,
+                           filter_visible=list(self.retriever.last_visible) if fil else [], filter_dropped=list(self.retriever.last_dropped) if fil else [])

@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
+from typing import Callable
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -23,8 +24,14 @@ def _tokens(s: str) -> list[str]:
 
 
 class Retriever:
-    def __init__(self, method: str = "tfidf", top_k: int = 4, recency_days: int = 3, recency_decay: float = 0.5, background: list[str] | None = None):
+    def __init__(self, method: str = "tfidf", top_k: int = 4, recency_days: int = 3, recency_decay: float = 0.5, background: list[str] | None = None,
+                 doc_filter: Callable[[NewsItem], bool] | None = None):
         self.method = method
+        # Detection baseline: visible documents the filter rejects are dropped BEFORE the top-k cut,
+        # so the agent still reads k documents. last_visible/last_dropped record provenance for metrics.
+        self.doc_filter = doc_filter
+        self.last_visible: list[str] = []
+        self.last_dropped: list[str] = []
         self.top_k = top_k
         self.recency_days = recency_days
         self.recency_decay = recency_decay
@@ -85,6 +92,11 @@ class Retriever:
     def retrieve(self, pool: NewsPool, query: str, date: str, all_dates: list[str], top_k: int | None = None) -> list[RetrievedDoc]:
         k = top_k or self.top_k
         vis = pool.visible(date, self.recency_days, all_dates)
+        if self.doc_filter is not None:
+            keep = [self.doc_filter(it) for it, _ in vis]
+            self.last_visible = [it.provenance for it, _ in vis]
+            self.last_dropped = [it.provenance for (it, _), k in zip(vis, keep) if not k]
+            vis = [v for v, k in zip(vis, keep) if k]
         if not vis:
             return []
         items = [v[0] for v in vis]

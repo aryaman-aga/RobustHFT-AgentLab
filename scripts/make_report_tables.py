@@ -21,7 +21,8 @@ from rhal.config import load_config
 from rhal.evaluation.stats import Comparison, compare
 from rhal.utils.io import ensure_dir, save_csv
 
-PCT = {"MER", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "ASR_given_exposed", "exposure_rate", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"}
+PCT = {"MER", "ASR", "ASR_net", "ASR_active", "ASR_active_net", "ASR_net_matched", "ASR_cf", "ASR_cf_net", "ASR_cf_net_matched", "ASR_given_exposed", "exposure_rate", "CR", "CR_clean_paired", "CR_delta_vs_clean", "max_drawdown", "hold_rate",
+       "filter_recall", "filter_clean_drop", "parse_fail_rate"}
 # Generated tables shrink to the available width only when they would overflow it (needs \\usepackage{adjustbox}).
 FIT_BEGIN, FIT_END = "\\begin{adjustbox}{max width=\\linewidth}", "\\end{adjustbox}"
 WIDE_COLS = 6  # arm tables with this many metric columns become two-column table*
@@ -125,6 +126,25 @@ def ablation_comparisons(group: str) -> list[Comparison]:
                 out.append(C(f"abl_kappa_{setting}_{lo}_{hi}", f"Grounding strength, {setting} attack (net ASR)", f"$\\kappa$ {lo} $-$ {hi}", "ASR_net", f"{pre}__kappa_{lo}", f"{pre}__kappa_{hi}"))
         for lo, hi in (("0.3", "0.7"), ("0.7", "1.0")):
             out.append(C(f"abl_kappa_cost_{lo}_{hi}", "Grounding strength (clean CR)", f"$\\kappa$ {lo} $-$ {hi}", "CR", f"clean__kappa_{lo}", f"clean__kappa_{hi}"))
+    elif group == "baselines":  # positive = the second-named variant has the lower value
+        gains = [("grounding", "none", "grounding"), ("text_free", "none", "text_free"), ("detect_10", "none", "detect_10"),
+                 ("detect_25", "none", "detect_25"), ("median", "none", "median"), ("trimmed", "none", "trimmed"),
+                 ("detect_10_vs_grounding", "detect_10", "grounding"), ("detect_25_vs_grounding", "detect_25", "grounding"),
+                 ("median_vs_grounding", "median", "grounding"), ("trimmed_vs_grounding", "trimmed", "grounding")]
+        for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
+            for key, a, b in gains:
+                out.append(C(f"base_{setting}_{key}", f"Baseline defenses, {setting} attack (net ASR)", f"{a} $-$ {b}", "ASR_net", f"{pre}__{a}", f"{pre}__{b}"))
+            out.append(C(f"base_{setting}_detect_nofilter", f"Detection vs an unfiltered attacker, {setting} (net ASR)", "none_nofilter $-$ detect_25_nofilter",
+                         "ASR_net", f"{pre}__none_nofilter", f"{pre}__detect_25_nofilter"))
+        for v in ("grounding", "text_free", "detect_10", "detect_25", "median", "trimmed"):
+            out.append(C(f"base_cost_{v}", "Baseline defenses (clean CR)", f"none $-$ {v}", "CR", "clean__none", f"clean__{v}"))
+    elif group == "aware_attack":  # a - b; for "x_aligned - x" a positive value means the aware attacker is stronger
+        pairs = [("gain_std", "none", "grounding"), ("gain_aligned", "none_aligned", "grounding_aligned"),
+                 ("aligned_vs_std_none", "none_aligned", "none"), ("aligned_vs_std_grounding", "grounding_aligned", "grounding"),
+                 ("aligned_vs_std_full", "full_aligned", "full"), ("conflict_vs_std_full", "full_conflict", "full")]
+        for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
+            for key, a, b in pairs:
+                out.append(C(f"aware_{setting}_{key}", f"Defense-aware attacker, {setting} (net ASR)", f"{a} $-$ {b}", "ASR_net", f"{pre}__{a}", f"{pre}__{b}"))
     elif group == "retrieval":  # is net ASR an artefact of top-k? (expect no difference)
         for k in ("k2", "k8"):
             out.append(C(f"abl_ret_{k}_net", "Retrieval breadth (net ASR)", f"net ASR: {k} $-$ k4", "ASR_net", f"injected__{k}", "injected__k4"))
@@ -335,7 +355,9 @@ def main() -> None:
         md.append("")
 
     abl_stats: list[pd.DataFrame] = []
-    for group, cols in [("attack", ["MER", "MER_lift", "ASR", "ASR_net", "CR"]), ("defense", ["ASR", "ASR_net", "ASR_active_net", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"]), ("retrieval", ["MER", "ASR", "ASR_net", "CR"]), ("grounding_strength", ["ASR", "ASR_net", "CR", "CR_clean_paired"])]:
+    ext_stats: list[pd.DataFrame] = []  # baselines + defense-aware attacker: their own appendix table
+    for group, cols in [("attack", ["MER", "MER_lift", "ASR", "ASR_net", "CR"]), ("defense", ["ASR", "ASR_net", "ASR_active_net", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"]), ("retrieval", ["MER", "ASR", "ASR_net", "CR"]), ("grounding_strength", ["ASR", "ASR_net", "CR", "CR_clean_paired"]),
+                        ("baselines", ["MER", "ASR", "ASR_net", "CR", "CR_clean_paired", "filter_recall", "filter_clean_drop"]), ("aware_attack", ["MER", "ASR", "ASR_net", "CR_clean_paired"])]:
         f = root / "ablation" / group / f"ablation_{group}_summary.csv"
         if f.exists():
             agg = pd.read_csv(f)
@@ -348,8 +370,11 @@ def main() -> None:
                 if not st.empty:
                     save_csv(st, root / "ablation" / group / f"ablation_{group}_stats.csv")
                     add_stats(st)
-                    abl_stats.append(st)
+                    (ext_stats if group in ("baselines", "aware_attack") else abl_stats).append(st)
                     md += [f"### Paired comparisons: {group}", "", stats_markdown(st), ""]
+    if ext_stats:
+        (tex_dir / "stats_extensions.tex").write_text(stats_latex(pd.concat(ext_stats, ignore_index=True), "Paired comparisons over seeds for the baseline defenses and the defense-aware attacker; conventions as in Table~\\ref{tab:stats_main}. "
+                                                                    "In \\emph{x\\_aligned $-$ x} rows a positive $\\Delta$ means the aware attacker is stronger.", "tab:stats_extensions"))
     if abl_stats:
         (tex_dir / "stats_ablation.tex").write_text(stats_latex(pd.concat(abl_stats, ignore_index=True), "Paired comparisons over seeds (ablations); conventions as in Table~\\ref{tab:stats_main}. "
                                                                 "Positive $\\Delta$: the second-named variant has the lower value.", "tab:stats_ablation"))

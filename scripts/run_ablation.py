@@ -5,9 +5,13 @@ Groups (configs/ablation.yaml):
   attack   -- paper Table 2 style: remove one MisGen component; vulnerable (undefended) agent.
   defense  -- our extension: which defensive component buys robustness, at what return cost.
   retrieval / grounding_strength -- sensitivity sweeps.
+  baselines    -- standard alternatives to grounding: text-free agent, detection filter, robust aggregation.
+  aware_attack -- an attacker that reads the public market evidence the defense uses (aligned / conflict).
 The defense and grounding_strength groups evaluate every variant twice: against an
 adaptive attacker (injected__*) and against the frozen attack recorded from the
-undefended agent of the same seed (frozen__*), which is identical for all variants.
+undefended agent of the same seed (frozen__*). The tape is recorded once per seed and attacker
+configuration (the variant's misgen.* overrides), so a defense-aware attacker's frozen arms
+replay its own attack; variants without misgen overrides share the pipeline's injected__none tape.
 Outputs under <output_dir>/ablation/<group>/.
 """
 from __future__ import annotations
@@ -34,7 +38,7 @@ def specs_for(group: str, name: str, ov: dict, cfg) -> list[RunSpec]:
     m = ov.get("features.micro.enabled", cfg.features.micro.enabled)
     if group == "attack":  # undefended agent, as in the paper's ablation
         return [RunSpec(f"injected__{name}", "misgen", False, False, False, ov), RunSpec(f"placebo__{name}", "placebo", False, False, False, ov)]
-    if group in ("defense", "grounding_strength"):
+    if group in ("defense", "grounding_strength", "baselines", "aware_attack"):
         if group == "grounding_strength":
             g, r, m = True, True, True
         return [RunSpec(f"injected__{name}", "misgen", g, r, m, ov), RunSpec(f"frozen__{name}", "replay", g, r, m, ov),
@@ -47,7 +51,7 @@ def specs_for(group: str, name: str, ov: dict, cfg) -> list[RunSpec]:
 def main() -> None:
     p = base_parser("Run ablations")
     p.add_argument("--ablation", default=str(ROOT / "configs" / "ablation.yaml"))
-    p.add_argument("--group", default="all", help="attack | defense | retrieval | grounding_strength | all")
+    p.add_argument("--group", default="all", help="attack | defense | retrieval | grounding_strength | baselines | aware_attack | all")
     a = p.parse_args()
     cfg = load_config(a.config, parse_overrides(a.set))
     if a.out:
@@ -60,7 +64,7 @@ def main() -> None:
     if not det_path.exists():
         det.save(det_path)
     datasets = {}
-    tapes = {}  # seed -> attack recorded against the undefended base agent (shared by all groups)
+    tapes = {}  # (seed, attacker overrides) -> attack recorded against the undefended agent
     for group in groups:
         out = ensure_dir(Path(cfg.output_dir) / "ablation" / group)
         rows: list[dict] = []
@@ -74,9 +78,10 @@ def main() -> None:
                 for spec in specs_for(group, name, dict(ov or {}), cfg):
                     tape = None
                     if spec.injection in TAPE_INJECTIONS:
-                        if seed not in tapes:  # same run as the pipeline's injected__none for this seed
-                            tapes[seed] = sim.run(RunSpec(TAPE_SOURCE_ARM, "misgen")).tape
-                        tape = tapes[seed]
+                        akey = tuple(sorted((k, v) for k, v in spec.overrides.items() if k.startswith("misgen.")))
+                        if (seed, akey) not in tapes:  # akey == () is the pipeline's injected__none run for this seed
+                            tapes[(seed, akey)] = sim.run(RunSpec(TAPE_SOURCE_ARM, "misgen", overrides=dict(akey))).tape
+                        tape = tapes[(seed, akey)]
                     r = sim.run(spec, tape=tape)
                     rows.append(r.to_row())
                     m = r.metrics
