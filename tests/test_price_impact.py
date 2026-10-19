@@ -1,4 +1,5 @@
 """Price-impact stress test: the frozen attack also moves the shared price path."""
+
 import copy
 
 import numpy as np
@@ -41,12 +42,14 @@ def test_impact_is_causal(sim, tape, small_cfg):
     a, b = impacted_dataset(sim.ds, tape, 1.0, small_cfg), impacted_dataset(sim.ds, late, 1.0, small_cfg)
     assert a.prices.iloc[: cut + 1].equals(b.prices.iloc[: cut + 1])
     assert a.feats.iloc[: cut + 1].fillna(-999).equals(b.feats.iloc[: cut + 1].fillna(-999))
-    assert not a.prices.iloc[cut + 1:].equals(b.prices.iloc[cut + 1:])
+    assert not a.prices.iloc[cut + 1 :].equals(b.prices.iloc[cut + 1 :])
 
 
 def test_both_twins_trade_the_moved_prices(sim, tape, small_cfg, detector):
     moved = impacted_dataset(sim.ds, tape, 2.0, small_cfg)
     assert not np.allclose(moved.prices["close"], sim.ds.prices["close"])
-    r = Simulation(small_cfg, moved, detector, 42).run(RunSpec("frozen__grounded", "replay", True, False, True), tape=tape)
+    r = Simulation(small_cfg, moved, detector, 42).run(
+        RunSpec("frozen__grounded", "replay", True, False, True), tape=tape
+    )
     assert [s["executed_price"] for s in r.treated_steps] == [s["executed_price"] for s in r.shadow_steps]
     assert r.treated_steps[-1]["executed_price"] == pytest.approx(moved.prices["open"].iloc[sim.t1])

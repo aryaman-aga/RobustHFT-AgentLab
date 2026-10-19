@@ -4,6 +4,16 @@ from .operators import BIAS_TYPES, MINOR_TYPES, REWRITE_TYPES, apply_minor, appl
 from .sampler import StrategySampler
 
 __all__ = [
-    "MisGenEngine", "StrategyHistory", "StrategySampler", "DetectabilityModel", "detect_features",
-    "BIAS_TYPES", "MINOR_TYPES", "REWRITE_TYPES", "apply_minor", "apply_rewrite", "apply_placebo", "bias_config",
+    "MisGenEngine",
+    "StrategyHistory",
+    "StrategySampler",
+    "DetectabilityModel",
+    "detect_features",
+    "BIAS_TYPES",
+    "MINOR_TYPES",
+    "REWRITE_TYPES",
+    "apply_minor",
+    "apply_rewrite",
+    "apply_placebo",
+    "bias_config",
 ]

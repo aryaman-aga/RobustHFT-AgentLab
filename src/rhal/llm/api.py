@@ -2,6 +2,7 @@
 
 They ignore ``schema`` and rely on the prompt asking for JSON; the parsers tolerate code fences.
 """
+
 from __future__ import annotations
 
 from .base import LLMClient
@@ -18,9 +19,14 @@ class AnthropicClient(LLMClient):
             raise ImportError("pip install anthropic") from e
         self._client = anthropic.Anthropic(api_key=api_key)
 
-    def _complete(self, system: str, user: str, max_tokens: int, schema: dict | None = None) -> str:  # pragma: no cover - network
+    def _complete(
+        self, system: str, user: str, max_tokens: int, schema: dict | None = None
+    ) -> str:  # pragma: no cover - network
         msg = self._client.messages.create(
-            model=self.model, max_tokens=max_tokens, temperature=0.0, system=system,
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=0.0,
+            system=system,
             messages=[{"role": "user", "content": user}],
         )
         return "".join(getattr(b, "text", "") for b in msg.content)
@@ -37,9 +43,13 @@ class OpenAICompatibleClient(LLMClient):
             raise ImportError("pip install openai") from e
         self._client = openai.OpenAI(api_key=api_key, base_url=base_url)
 
-    def _complete(self, system: str, user: str, max_tokens: int, schema: dict | None = None) -> str:  # pragma: no cover - network
+    def _complete(
+        self, system: str, user: str, max_tokens: int, schema: dict | None = None
+    ) -> str:  # pragma: no cover - network
         r = self._client.chat.completions.create(
-            model=self.model, max_tokens=max_tokens, temperature=0.0,
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=0.0,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         )
         return r.choices[0].message.content or ""

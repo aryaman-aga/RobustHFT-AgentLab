@@ -10,6 +10,7 @@ derived from the lexicon sentiment score:
 * decider requests get an action, a confidence (0..100) and a ``news_stance`` (-100..100) from
   the whole prompt.
 """
+
 from __future__ import annotations
 
 import json
@@ -30,4 +31,6 @@ class MockLLM(LLMClient):
             return json.dumps({"score": score_sentiment(article)})
         s = score_sentiment(user)
         action = "Buy" if s > 0.15 else "Sell" if s < -0.15 else "Hold"
-        return json.dumps({"action": action, "confidence": int(round(100 * min(1.0, abs(s)))), "news_stance": int(round(100 * s))})
+        return json.dumps(
+            {"action": action, "confidence": int(round(100 * min(1.0, abs(s)))), "news_stance": int(round(100 * s))}
+        )

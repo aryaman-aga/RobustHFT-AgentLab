@@ -107,18 +107,18 @@ def _simulate_intraday(daily: pd.DataFrame, cfg: SynthConfig, seed: int) -> pd.D
     profile = 0.6 + 0.8 * x**2
     profile /= profile.sum()
     for _, r in daily.iterrows():
-        o, c, h, l, v = r["open"], r["close"], r["high"], r["low"], r["volume"]
+        o, c, h, lo, v = r["open"], r["close"], r["high"], r["low"], r["volume"]
         lo_ret = np.log(c / o)
         # Brownian bridge in log space
         z = g.standard_normal(m)
         w = np.cumsum(z) / np.sqrt(m)
         t = np.arange(1, m + 1) / m
         bridge = w - t * w[-1]
-        vol_scale = max(abs(np.log(h / l)), 1e-4) * 0.35
+        vol_scale = max(abs(np.log(h / lo)), 1e-4) * 0.35
         path = np.log(o) + t * lo_ret + vol_scale * bridge
         px = np.exp(path)
         # clip to the day's range so intraday bars respect daily high/low
-        px = np.clip(px, l, h)
+        px = np.clip(px, lo, h)
         px[-1] = c
         bar_open = np.concatenate([[o], px[:-1]])
         bar_close = px
@@ -236,7 +236,7 @@ def _render_news(g: np.random.Generator, s: float, date: str, prev_close: float)
     else:  # margin
         mv = "expanded" if s > 0.15 else "contracted" if s < -0.15 else "was flat at"
         text = (
-            f"{E['company']}'s operating margin {mv}{"" if mv.endswith("at") else " to"} {margin}% in {q} {yr}, {conn} {cause}. "
+            f"{E['company']}'s operating margin {mv}{'' if mv.endswith('at') else ' to'} {margin}% in {q} {yr}, {conn} {cause}. "
             f"Free cash flow was {adj}, and shares {verb} {pct}% following the release."
         )
     return text, kind

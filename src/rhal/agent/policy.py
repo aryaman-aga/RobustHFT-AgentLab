@@ -15,6 +15,7 @@ LLMPolicy       : decider mode. Builds the prompt (Perception + Profile + Memory
                   and memory never see lexicon numbers). Connection errors raise; an unreadable
                   answer becomes Hold and is flagged (parse_failed -> metric parse_fail_rate).
 """
+
 from __future__ import annotations
 
 import json
@@ -55,10 +56,22 @@ class RulePolicy:
     def __init__(self, threshold: float = 0.15):
         self.threshold = threshold
 
-    def decide(self, obs: Observation, profile: Profile, memory: AgentMemory, *, grounded: bool, kappa: float, text_weight: float, adaptive_trust: bool) -> PolicyOutput:
+    def decide(
+        self,
+        obs: Observation,
+        profile: Profile,
+        memory: AgentMemory,
+        *,
+        grounded: bool,
+        kappa: float,
+        text_weight: float,
+        adaptive_trust: bool,
+    ) -> PolicyOutput:
         s_mkt = obs.evidence.market_signal if obs.evidence else _basic_market_read(obs)
         a = Action.BUY if s_mkt > self.threshold else Action.SELL if s_mkt < -self.threshold else Action.HOLD
-        return PolicyOutput(a, min(1.0, abs(s_mkt)), s_mkt, 0.0, s_mkt, 1.0, self.threshold, "rule: market evidence only")
+        return PolicyOutput(
+            a, min(1.0, abs(s_mkt)), s_mkt, 0.0, s_mkt, 1.0, self.threshold, "rule: market evidence only"
+        )
 
 
 def weighted_median(x: np.ndarray, w: np.ndarray) -> float:
@@ -74,12 +87,20 @@ def weighted_trimmed_mean(x: np.ndarray, w: np.ndarray, trim: float) -> float:
     xs, ws = x[order], w[order] / w.sum()
     hi = np.cumsum(ws)
     lo = hi - ws
-    kept = np.clip(np.minimum(hi, 1 - trim) - np.maximum(lo, trim), 0.0, None)  # weight of each item inside [trim, 1-trim]
+    kept = np.clip(
+        np.minimum(hi, 1 - trim) - np.maximum(lo, trim), 0.0, None
+    )  # weight of each item inside [trim, 1-trim]
     return float(np.sum(kept * xs) / kept.sum()) if kept.sum() > 0 else weighted_median(x, w)
 
 
 class SurrogatePolicy:
-    def __init__(self, threshold: float = 0.15, scorer: Callable[[str], float] | None = None, text_agg: str = "mean", trim_frac: float = 0.25):
+    def __init__(
+        self,
+        threshold: float = 0.15,
+        scorer: Callable[[str], float] | None = None,
+        text_agg: str = "mean",
+        trim_frac: float = 0.25,
+    ):
         self.base_threshold = threshold
         self.scorer = scorer or score_sentiment  # lexicon by default; LLMTextScorer in reader mode
         self.text_agg = text_agg  # mean (paper) | median | trimmed: robust-aggregation baseline
@@ -112,7 +133,17 @@ class SurrogatePolicy:
             s += bias.herd_weight * memory.majority_action_sign()
         return float(np.clip(s, -1, 1))
 
-    def decide(self, obs: Observation, profile: Profile, memory: AgentMemory, *, grounded: bool, kappa: float, text_weight: float, adaptive_trust: bool) -> PolicyOutput:
+    def decide(
+        self,
+        obs: Observation,
+        profile: Profile,
+        memory: AgentMemory,
+        *,
+        grounded: bool,
+        kappa: float,
+        text_weight: float,
+        adaptive_trust: bool,
+    ) -> PolicyOutput:
         bias = profile.bias
         s_text = self.text_signal(obs, bias, memory)
         if adaptive_trust:
@@ -127,7 +158,9 @@ class SurrogatePolicy:
         conf = float(np.clip(abs(s) / max(2 * thr, 1e-6), 0, 1))
         if bias.name == "overconfidence":
             conf = float(np.clip(conf * 1.3 + 0.1, 0, 1))
-        rat = f"text {s_text:+.2f}, market {s_mkt:+.2f}, consistency {c:.2f}, fused {s:+.2f}" + (f", bias={bias.name}" if bias.name else "")
+        rat = f"text {s_text:+.2f}, market {s_mkt:+.2f}, consistency {c:.2f}, fused {s:+.2f}" + (
+            f", bias={bias.name}" if bias.name else ""
+        )
         return PolicyOutput(a, conf, float(s), s_text, s_mkt, c, thr, rat)
 
 
@@ -164,7 +197,9 @@ class LLMPolicy:
 
     def build_prompt(self, obs: Observation, profile: Profile, memory: AgentMemory, grounded: bool) -> tuple[str, str]:
         sys_p = profile.system_prompt(grounded)
-        lines = [f"Date: {obs.date}. Close {obs.close:.2f}, 1d return {obs.ret_1:+.2%}, 5d vol {obs.vol_5:.3f}, 20d drawdown {obs.dd_20:+.2%}."]
+        lines = [
+            f"Date: {obs.date}. Close {obs.close:.2f}, 1d return {obs.ret_1:+.2%}, 5d vol {obs.vol_5:.3f}, 20d drawdown {obs.dd_20:+.2%}."
+        ]
         if grounded and obs.evidence:
             lines.append("Temporal evidence: " + obs.evidence.summary)
         lines.append("Memory:\n" + memory.summary())
@@ -174,11 +209,23 @@ class LLMPolicy:
         lines.append("Decide now. JSON only.")
         return sys_p, "\n".join(lines)
 
-    def decide(self, obs: Observation, profile: Profile, memory: AgentMemory, *, grounded: bool, kappa: float, text_weight: float, adaptive_trust: bool) -> PolicyOutput:
+    def decide(
+        self,
+        obs: Observation,
+        profile: Profile,
+        memory: AgentMemory,
+        *,
+        grounded: bool,
+        kappa: float,
+        text_weight: float,
+        adaptive_trust: bool,
+    ) -> PolicyOutput:
         thr = self.fallback.base_threshold * profile.bias.threshold_scale
         s_mkt = obs.evidence.market_signal if (grounded and obs.evidence) else _basic_market_read(obs)
         sys_p, user = self.build_prompt(obs, profile, memory, grounded)
-        r = self.client.complete(sys_p, user, max_tokens=self.max_tokens, schema=DECIDER_SCHEMA)  # network errors propagate
+        r = self.client.complete(
+            sys_p, user, max_tokens=self.max_tokens, schema=DECIDER_SCHEMA
+        )  # network errors propagate
         try:
             obj = _parse_json(r.text)
             a = Action(str(obj["action"]).strip().capitalize())

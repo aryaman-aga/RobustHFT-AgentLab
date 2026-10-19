@@ -1,4 +1,5 @@
 """Transaction cost model: proportional fee + symmetric slippage in basis points."""
+
 from __future__ import annotations
 
 

@@ -1,4 +1,5 @@
 """News pool with mandatory provenance labels and date-gated access."""
+
 from __future__ import annotations
 
 from collections import defaultdict

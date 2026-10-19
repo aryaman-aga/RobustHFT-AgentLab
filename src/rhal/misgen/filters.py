@@ -1,4 +1,5 @@
 """Quality filters: similarity (A_sim) and detectability (A_det)."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -22,7 +23,9 @@ class SimilarityEvaluator:
 
 
 class QualityFilter:
-    def __init__(self, sim: SimilarityEvaluator, det: DetectabilityModel, tau_sim: float, tau_det: float, enabled: bool = True):
+    def __init__(
+        self, sim: SimilarityEvaluator, det: DetectabilityModel, tau_sim: float, tau_det: float, enabled: bool = True
+    ):
         self.sim = sim
         self.det = det
         self.tau_sim = tau_sim

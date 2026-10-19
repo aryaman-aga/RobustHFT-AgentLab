@@ -1,4 +1,5 @@
 """Hand-computed cases for the paired statistics (evaluation/stats.py)."""
+
 import numpy as np
 import pandas as pd
 
@@ -44,9 +45,18 @@ def test_paired_diffs_aligns_on_seed():
 
 def test_compare_end_to_end():
     seeds = range(20)
-    runs = pd.DataFrame([{"arm": arm, "seed": s, "ASR": base + 0.01 * (s % 3)} for s in seeds for arm, base in (("inj", 0.30), ("plc", 0.20), ("other", 0.30))])
-    comps = [Comparison("net", "f", "inj vs plc", "ASR", "inj", "plc"), Comparison("null", "f", "inj vs other", "ASR", "inj", "other"),
-             Comparison("missing", "f", "absent arm", "ASR", "inj", "nope")]
+    runs = pd.DataFrame(
+        [
+            {"arm": arm, "seed": s, "ASR": base + 0.01 * (s % 3)}
+            for s in seeds
+            for arm, base in (("inj", 0.30), ("plc", 0.20), ("other", 0.30))
+        ]
+    )
+    comps = [
+        Comparison("net", "f", "inj vs plc", "ASR", "inj", "plc"),
+        Comparison("null", "f", "inj vs other", "ASR", "inj", "other"),
+        Comparison("missing", "f", "absent arm", "ASR", "inj", "nope"),
+    ]
     st = compare(runs, comps).set_index("key")
     assert "missing" not in st.index  # comparisons without data are skipped, not crashed on
     assert np.isclose(st.loc["net", "mean_diff"], 0.10) and st.loc["net", "ci_lo"] <= 0.10 <= st.loc["net", "ci_hi"]

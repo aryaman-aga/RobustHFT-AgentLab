@@ -11,6 +11,7 @@ the day when available) and obey the same trailing-only contract as core.py.
 * illiquidity    : Amihud |ret| / dollar-volume, trailing mean, scaled
 * range_ratio    : today's range / trailing-mean range
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -23,11 +24,11 @@ def compute_micro_features(
     rv_window: int = 5,
     volume_window: int = 20,
 ) -> pd.DataFrame:
-    o, h, l, c, v = (prices[k].astype(float) for k in ("open", "high", "low", "close", "volume"))
+    o, h, lo, c, v = (prices[k].astype(float) for k in ("open", "high", "low", "close", "volume"))
     out = pd.DataFrame(index=prices.index)
-    rng_ = (h - l).clip(lower=1e-9)
+    rng_ = (h - lo).clip(lower=1e-9)
     out["spread_proxy"] = rng_ / c
-    gk = 0.5 * np.log(h / l) ** 2 - (2 * np.log(2) - 1) * np.log(c / o) ** 2
+    gk = 0.5 * np.log(h / lo) ** 2 - (2 * np.log(2) - 1) * np.log(c / o) ** 2
     out["rv_gk"] = gk.rolling(rv_window, min_periods=rv_window).mean()
     if intraday is not None and {"buy_volume", "sell_volume"}.issubset(intraday.columns):
         agg = intraday.groupby("date")[["buy_volume", "sell_volume"]].sum()

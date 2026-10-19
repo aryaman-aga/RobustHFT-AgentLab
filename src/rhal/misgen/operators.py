@@ -11,6 +11,7 @@ Three sub-spaces (paper Eq. 13):
     Phi_Rewrite -> acts on surface style (2 registers)
 plus a *placebo* paraphrase used as a noise-floor control (our addition).
 """
+
 from __future__ import annotations
 
 import re
@@ -83,14 +84,30 @@ _YEAR = re.compile(r"\b(20\d\d)\b")
 def op_flipping(text: str, g: np.random.Generator) -> str:
     """Reverse ALL market implications (paper Fig. 2)."""
     extra = {
-        "up": "down", "down": "up", "accelerate": "weigh on", "weigh on": "accelerate", "support": "pressure",
-        "pressure": "support", "buying": "selling", "selling": "buying", "cleared": "opened an investigation into",
-        "opened an investigation into": "cleared", "heavy": "light", "reaffirmed": "cut", "maintained": "downgraded",
-        "matched": "missed", "modestly beat": "slightly missed", "slightly missed": "modestly beat",
+        "up": "down",
+        "down": "up",
+        "accelerate": "weigh on",
+        "weigh on": "accelerate",
+        "support": "pressure",
+        "pressure": "support",
+        "buying": "selling",
+        "selling": "buying",
+        "cleared": "opened an investigation into",
+        "opened an investigation into": "cleared",
+        "heavy": "light",
+        "reaffirmed": "cut",
+        "maintained": "downgraded",
+        "matched": "missed",
+        "modestly beat": "slightly missed",
+        "slightly missed": "modestly beat",
         "a major expansion of its cloud platform": "a delay to its next platform release",
         "a delay to its next platform release": "a major expansion of its cloud platform",
-        "market perform": "underperform", "middle": "worst", "held steady": "fell", "was little changed": "dropped",
-        "traded flat": "declined", "was flat at": "contracted to",
+        "market perform": "underperform",
+        "middle": "worst",
+        "held steady": "fell",
+        "was little changed": "dropped",
+        "traded flat": "declined",
+        "was flat at": "contracted to",
     }
     mapping = dict(L.ANTONYMS)
     mapping.update(extra)
@@ -109,10 +126,22 @@ def op_sentiment(text: str, g: np.random.Generator) -> str:
     amplify = g.random() < 0.7
     if amplify:
         mapping = {
-            "rose": "surged", "gained": "rallied", "climbed": "jumped", "edged higher": "soared", "slipped": "plunged",
-            "fell": "tumbled", "declined": "slumped", "edged lower": "collapsed", "solid": "exceptional", "improved": "record",
-            "muted": "alarming", "softened": "deteriorated sharply", "cautious": "deeply worried", "modestly beat": "decisively beat",
-            "slightly missed": "badly missed", "resilient": "dominant",
+            "rose": "surged",
+            "gained": "rallied",
+            "climbed": "jumped",
+            "edged higher": "soared",
+            "slipped": "plunged",
+            "fell": "tumbled",
+            "declined": "slumped",
+            "edged lower": "collapsed",
+            "solid": "exceptional",
+            "improved": "record",
+            "muted": "alarming",
+            "softened": "deteriorated sharply",
+            "cautious": "deeply worried",
+            "modestly beat": "decisively beat",
+            "slightly missed": "badly missed",
+            "resilient": "dominant",
         }
         hedge_map = {h: g.choice(L.INTENSIFIERS) for h in L.HEDGES}
         mapping.update(hedge_map)
@@ -121,9 +150,20 @@ def op_sentiment(text: str, g: np.random.Generator) -> str:
             out = out.rstrip(".") + ", a move analysts called decisive."
         return out
     mapping = {
-        "surged": "edged higher", "rallied": "rose", "jumped": "gained", "soared": "ticked up", "plunged": "edged lower",
-        "tumbled": "slipped", "slumped": "fell", "collapsed": "declined", "strong": "adequate", "robust": "acceptable",
-        "record": "improved", "weak": "soft", "disappointing": "muted", "fragile": "uneven",
+        "surged": "edged higher",
+        "rallied": "rose",
+        "jumped": "gained",
+        "soared": "ticked up",
+        "plunged": "edged lower",
+        "tumbled": "slipped",
+        "slumped": "fell",
+        "collapsed": "declined",
+        "strong": "adequate",
+        "robust": "acceptable",
+        "record": "improved",
+        "weak": "soft",
+        "disappointing": "muted",
+        "fragile": "uneven",
     }
     inten_map = {i: g.choice(L.HEDGES) for i in L.INTENSIFIERS}
     mapping.update(inten_map)
@@ -187,7 +227,11 @@ def op_entity(text: str, g: np.random.Generator) -> str:
 def op_concept(text: str, g: np.random.Generator) -> str:
     out, n = _swap_many(text, L.CONCEPT_SWAPS)
     if n == 0:
-        out = text.replace("shares", "bookings", 1) if "shares" in text else text + " Net income figures were reported in place of revenue."
+        out = (
+            text.replace("shares", "bookings", 1)
+            if "shares" in text
+            else text + " Net income figures were reported in place of revenue."
+        )
     return out
 
 
@@ -195,7 +239,13 @@ def op_causal(text: str, g: np.random.Generator) -> str:
     """Replace the cause while keeping the outcome (explanatory-level misinformation)."""
     for cause in L.CAUSES_POS + L.CAUSES_NEG + L.CAUSES_NEUTRAL:
         if cause in text:
-            pool = L.CAUSES_NEG if cause in L.CAUSES_POS else L.CAUSES_POS if cause in L.CAUSES_NEG else L.CAUSES_POS + L.CAUSES_NEG
+            pool = (
+                L.CAUSES_NEG
+                if cause in L.CAUSES_POS
+                else L.CAUSES_POS
+                if cause in L.CAUSES_NEG
+                else L.CAUSES_POS + L.CAUSES_NEG
+            )
             return text.replace(cause, g.choice(pool), 1)
     return text + f" The move was attributed to {g.choice(L.CAUSES_NEG + L.CAUSES_POS)}."
 
@@ -209,8 +259,14 @@ def op_other(text: str, g: np.random.Generator) -> str:
 
 
 _MINOR = {
-    "flipping": op_flipping, "sentiment": op_sentiment, "numerical": op_numerical, "temporal": op_temporal,
-    "entity": op_entity, "concept": op_concept, "causal": op_causal, "other": op_other,
+    "flipping": op_flipping,
+    "sentiment": op_sentiment,
+    "numerical": op_numerical,
+    "temporal": op_temporal,
+    "entity": op_entity,
+    "concept": op_concept,
+    "causal": op_causal,
+    "other": op_other,
 }
 
 
@@ -221,10 +277,26 @@ def apply_minor(text: str, kind: str, g: np.random.Generator) -> str:
 # ---------------------------------------------------------------------------
 # Phi_Rewrite  (surface only -- must not undo Phi_Minor; length-neutral)
 # ---------------------------------------------------------------------------
-_FORMAL = {"shares": "the equity", "stock": "security", "analysts": "market participants", "said": "stated", "sounded": "appeared",
-           "in early trading": "intraday", "after hours": "post-close", "on the note": "thereafter", "following the release": "post-release"}
-_CONCISE = {"the company said": "it said", "Management sounded": "Management was", "following the release": "post-release",
-            "in early trading": "early", "after hours": "late", "The result": "Results", "The price target was set at": "Price target:"}
+_FORMAL = {
+    "shares": "the equity",
+    "stock": "security",
+    "analysts": "market participants",
+    "said": "stated",
+    "sounded": "appeared",
+    "in early trading": "intraday",
+    "after hours": "post-close",
+    "on the note": "thereafter",
+    "following the release": "post-release",
+}
+_CONCISE = {
+    "the company said": "it said",
+    "Management sounded": "Management was",
+    "following the release": "post-release",
+    "in early trading": "early",
+    "after hours": "late",
+    "The result": "Results",
+    "The price target was set at": "Price target:",
+}
 _DROP_ADVERBS = re.compile(r"\b(" + "|".join(L.INTENSIFIERS) + r")\s+")
 
 
@@ -248,7 +320,9 @@ def _ensure_ticker(text: str) -> str:
 def apply_rewrite(text: str, style: str, g: np.random.Generator) -> str:
     if style == "academic_style":
         out, _ = _swap_many(text, _FORMAL)
-        out = _DROP_ADVERBS.sub(lambda m: g.choice(L.HEDGES) + " ", out)  # intensifier -> hedge (formal, cautious register)
+        out = _DROP_ADVERBS.sub(
+            lambda m: g.choice(L.HEDGES) + " ", out
+        )  # intensifier -> hedge (formal, cautious register)
         out = _merge_sentences(out, ", while ")
         out = _ensure_ticker(out)
         return f"{g.choice(L.ACADEMIC_MARKERS)} {out[0].lower() + out[1:] if out[:3] not in ('Nor', 'Hal', 'NWS', 'Tra', 'Sha') else out}"
@@ -265,8 +339,15 @@ def apply_rewrite(text: str, style: str, g: np.random.Generator) -> str:
 # Placebo (meaning-preserving) -- noise-floor control, our addition
 # ---------------------------------------------------------------------------
 def apply_placebo(text: str, g: np.random.Generator) -> str:
-    syn = {"shares": "the stock", "reported": "posted", "announced": "unveiled", "citing": "pointing to",
-           "in early trading": "in morning trade", "after hours": "in extended trading", "following": "after"}
+    syn = {
+        "shares": "the stock",
+        "reported": "posted",
+        "announced": "unveiled",
+        "citing": "pointing to",
+        "in early trading": "in morning trade",
+        "after hours": "in extended trading",
+        "following": "after",
+    }
     conn = {c: g.choice(L.CAUSAL_CONNECTORS) for c in L.CAUSAL_CONNECTORS}
     syn.update(conn)
     out, _ = _swap_many(text, syn)

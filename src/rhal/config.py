@@ -4,6 +4,7 @@ Usage::
 
     cfg = load_config("configs/default.yaml", overrides={"grounding.enabled": False})
 """
+
 from __future__ import annotations
 
 import copy
@@ -103,7 +104,9 @@ class MisGenCfg(_Section):
 
 class AgentCfg(_Section):
     mode: Literal["rule", "mock", "llm"] = "mock"  # mock = transparent surrogate policy; llm = the LLM picks the action
-    text_scorer: Literal["lexicon", "llm"] = "lexicon"  # who reads each news item for the surrogate policy (llm = reader mode)
+    text_scorer: Literal["lexicon", "llm"] = (
+        "lexicon"  # who reads each news item for the surrogate policy (llm = reader mode)
+    )
     action_threshold: float = 0.15
     text_agg: Literal["mean", "median", "trimmed"] = "mean"  # how retrieved-document scores are pooled (baseline B3)
     trim_frac: float = Field(0.25, ge=0.0, lt=0.5)  # weight trimmed from each tail when text_agg=trimmed
@@ -127,7 +130,9 @@ class RiskCfg(_Section):
     stop_loss: float = 0.06
     take_profit: float = 0.12
     hold_on_conflict: bool = True
-    conflict_mode: Literal["hold", "shrink"] = "hold"  # hold = paper rule; shrink = keep the action, move only c of the way
+    conflict_mode: Literal["hold", "shrink"] = (
+        "hold"  # hold = paper rule; shrink = keep the action, move only c of the way
+    )
     conflict_threshold: float = 0.6
     min_confidence: float = 0.3
     drawdown_throttle: float = 0.10

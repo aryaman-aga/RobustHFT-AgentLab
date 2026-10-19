@@ -9,6 +9,7 @@ clean vs *minor-perturbed* text only -- NOT on rewritten text -- to mimic a
 The decision threshold is calibrated on held-out clean text to a target
 false-positive rate so that tau_det has a stable meaning across seeds.
 """
+
 from __future__ import annotations
 
 import pickle
@@ -27,9 +28,24 @@ _NUM = re.compile(r"\d+(?:\.\d+)?")
 _SENT = re.compile(r"[.;]")
 
 FEATURE_NAMES = [
-    "pos_density", "neg_density", "abs_polarity", "mixed_polarity", "intensifier_rate", "hedge_rate",
-    "n_numbers", "max_pct", "mean_pct", "pct_over_30", "cause_outcome_mismatch", "n_words", "avg_sent_len",
-    "entity_count", "has_ticker", "sentence_count", "vague_attribution", "n_causal_connectors",
+    "pos_density",
+    "neg_density",
+    "abs_polarity",
+    "mixed_polarity",
+    "intensifier_rate",
+    "hedge_rate",
+    "n_numbers",
+    "max_pct",
+    "mean_pct",
+    "pct_over_30",
+    "cause_outcome_mismatch",
+    "n_words",
+    "avg_sent_len",
+    "entity_count",
+    "has_ticker",
+    "sentence_count",
+    "vague_attribution",
+    "n_causal_connectors",
 ]
 
 
@@ -66,13 +82,33 @@ def detect_features(text: str, trigram_vocab: set[str] | None = None) -> np.ndar
     avg_sent = np.mean([len(_WORD.findall(s)) for s in sents]) if sents else 0.0
     ents = sum(text.count(e) for e in L.ENTITY_SWAPS)
     tl = text.lower()
-    vague = float(any(k in tl for k in ("sources familiar", "later attributed", "was attributed to", "further developments", "reportedly")))
+    vague = float(
+        any(
+            k in tl
+            for k in ("sources familiar", "later attributed", "was attributed to", "further developments", "reportedly")
+        )
+    )
     n_conn = sum(tl.count(c) for c in L.CAUSAL_CONNECTORS)
     return np.array(
         [
-            npos / n, nneg / n, abs(pos - neg), float(npos > 0 and nneg > 0), inten / n, hedge / n,
-            len(nums), max(pcts) if pcts else 0.0, float(np.mean(pcts)) if pcts else 0.0, float(any(p > 30 for p in pcts)),
-            _cause_mismatch(text), n, avg_sent, ents, float(L.ENTITY["ticker"] in text), len(sents), vague, n_conn,
+            npos / n,
+            nneg / n,
+            abs(pos - neg),
+            float(npos > 0 and nneg > 0),
+            inten / n,
+            hedge / n,
+            len(nums),
+            max(pcts) if pcts else 0.0,
+            float(np.mean(pcts)) if pcts else 0.0,
+            float(any(p > 30 for p in pcts)),
+            _cause_mismatch(text),
+            n,
+            avg_sent,
+            ents,
+            float(L.ENTITY["ticker"] in text),
+            len(sents),
+            vague,
+            n_conn,
         ],
         dtype=float,
     )
@@ -87,7 +123,9 @@ class DetectabilityModel:
         self.meta: dict = {}
 
     # -- training ----------------------------------------------------------
-    def fit(self, clean: list[str], perturbed: list[str], target_fpr: float = 0.10, seed: int = 0) -> "DetectabilityModel":
+    def fit(
+        self, clean: list[str], perturbed: list[str], target_fpr: float = 0.10, seed: int = 0
+    ) -> "DetectabilityModel":
         g = np.random.default_rng(seed)
         idx = g.permutation(len(clean))
         n_tr = int(0.7 * len(clean))
@@ -102,9 +140,13 @@ class DetectabilityModel:
         self.threshold = float(np.quantile(ho, 1 - target_fpr)) if len(ho) else 0.5
         train_acc = float((self.clf.predict(Xs) == y).mean())
         self.meta = {
-            "n_clean_train": len(tr_clean), "n_perturbed": len(perturbed), "n_clean_holdout": len(ho_clean),
-            "train_acc": train_acc, "holdout_clean_fpr_at_threshold": float((ho > self.threshold).mean()) if len(ho) else None,
-            "threshold": self.threshold, "target_fpr": target_fpr,
+            "n_clean_train": len(tr_clean),
+            "n_perturbed": len(perturbed),
+            "n_clean_holdout": len(ho_clean),
+            "train_acc": train_acc,
+            "holdout_clean_fpr_at_threshold": float((ho > self.threshold).mean()) if len(ho) else None,
+            "threshold": self.threshold,
+            "target_fpr": target_fpr,
             "coef": dict(zip(FEATURE_NAMES, self.clf.coef_[0].round(3).tolist())),
         }
         return self

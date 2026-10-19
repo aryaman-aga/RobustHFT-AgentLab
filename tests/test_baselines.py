@@ -1,11 +1,11 @@
 """Baseline defenses (text-free agent, detection filter, robust aggregation) and the defense-aware attacker."""
+
 import numpy as np
-import pandas as pd
 import pytest
+from test_controls import _mutate_future
 
 from rhal.agent.policy import weighted_median, weighted_trimmed_mean
 from rhal.evaluation.experiment import Dataset, RunSpec, Simulation
-from test_controls import _mutate_future
 
 
 @pytest.fixture(scope="module")
@@ -45,8 +45,12 @@ def test_detection_threshold_uses_only_pre_window_news(sim, small_cfg, detector)
     """Rewrite every article in the evaluation window: the calibrated threshold must not move."""
     news = sim.ds.news.copy()
     future = news["date"].astype(str) >= sim.ds.dates[sim.t0]
-    news.loc[future, "text"] = "Nordwind Systems said nothing material today, according to people familiar with the matter."
-    other = Simulation(small_cfg, Dataset(sim.ds.prices, news, sim.ds.intraday, sim.ds.feats, sim.ds.dates), detector, 42)
+    news.loc[future, "text"] = (
+        "Nordwind Systems said nothing material today, according to people familiar with the matter."
+    )
+    other = Simulation(
+        small_cfg, Dataset(sim.ds.prices, news, sim.ds.intraday, sim.ds.feats, sim.ds.dates), detector, 42
+    )
     sim.detect_filter(0.2)
     other.detect_filter(0.2)
     assert sim.filter_thresholds[0.2] == other.filter_thresholds[0.2]
@@ -63,7 +67,9 @@ def test_weighted_median_and_trimmed_mean_by_hand():
     assert weighted_trimmed_mean(x, w, 0.0) == pytest.approx(x.mean())
     # one heavy outlier moves the mean but not the median
     w2 = np.array([0.1, 0.6, 0.15, 0.15])
-    assert weighted_median(x, w2) == -0.8 and weighted_median(np.array([0.9, 0.1, 0.2]), np.array([0.2, 0.4, 0.4])) == 0.2
+    assert (
+        weighted_median(x, w2) == -0.8 and weighted_median(np.array([0.9, 0.1, 0.2]), np.array([0.2, 0.4, 0.4])) == 0.2
+    )
 
 
 def test_median_aggregation_runs_and_differs_from_mean(small_cfg, small_dataset, detector):
@@ -82,14 +88,18 @@ def _aware(small_cfg, ds, detector, mode):
 
 def test_aware_attacker_is_deterministic_and_ignores_arm_names(small_cfg, small_dataset, detector):
     a = _aware(small_cfg, small_dataset, detector, "aligned").run(RunSpec("injected__x", "misgen", True, False, True))
-    b = _aware(small_cfg, small_dataset, detector, "aligned").run(RunSpec("injected__renamed", "misgen", True, False, True))
+    b = _aware(small_cfg, small_dataset, detector, "aligned").run(
+        RunSpec("injected__renamed", "misgen", True, False, True)
+    )
     assert a.metrics == b.metrics
 
 
 def test_aligned_edits_agree_with_the_market_more_than_conflicting_ones(small_cfg, small_dataset, detector):
     def mean_align(mode):
         r = _aware(small_cfg, small_dataset, detector, mode).run(RunSpec("injected__none", "misgen"))
-        vals = [d.strategy["align"] for docs in r.tape.docs.values() for d in docs if d.strategy and "align" in d.strategy]
+        vals = [
+            d.strategy["align"] for docs in r.tape.docs.values() for d in docs if d.strategy and "align" in d.strategy
+        ]
         assert vals, "the aware attacker recorded no alignment"
         return float(np.mean(vals))
 
@@ -103,5 +113,5 @@ def test_aware_attacker_does_not_see_future_prices(sim, small_cfg, detector):
     spec = RunSpec("injected__none", "misgen")
     a = _aware(small_cfg, sim.ds, detector, "aligned").run(spec).tape
     b = _aware(small_cfg, mutated, detector, "aligned").run(spec).tape
-    early = [d for d in sim.ds.dates[sim.t0:cut]]
+    early = [d for d in sim.ds.dates[sim.t0 : cut]]
     assert [[x.text for x in a.docs[d]] for d in early] == [[x.text for x in b.docs[d]] for d in early]

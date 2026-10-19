@@ -5,6 +5,7 @@ and hedges, and explicit 'up X%' / 'down X%' numeric cues. Output in [-1, 1].
 This deliberately mimics the *shape* of an LLM's reaction to financial text
 (direction words dominate, numbers and tone modulate) while being transparent.
 """
+
 from __future__ import annotations
 
 import re
@@ -13,8 +14,9 @@ import numpy as np
 
 from .. import lexicon as L
 
-_TOKEN = re.compile(r"[a-z0-9'%.$]+")
-_UPDOWN = re.compile(r"\b(up|down|rose|fell|gained|dropped|surged|plunged|jumped|tumbled|climbed|declined|soared|slumped|rallied|collapsed)\s+(\d+(?:\.\d+)?)%")
+_UPDOWN = re.compile(
+    r"\b(up|down|rose|fell|gained|dropped|surged|plunged|jumped|tumbled|climbed|declined|soared|slumped|rallied|collapsed)\s+(\d+(?:\.\d+)?)%"
+)
 # longest first; ties broken alphabetically so the order (and float summation) never depends on PYTHONHASHSEED
 _PHRASES = sorted(set(L.POSITIVE) | set(L.NEGATIVE), key=lambda p: (-len(p), p))
 _WEIGHT = {**L.POSITIVE, **L.NEGATIVE}
@@ -22,7 +24,6 @@ _WEIGHT = {**L.POSITIVE, **L.NEGATIVE}
 
 def score_sentiment(text: str) -> float:
     t = text.lower()
-    tokens = _TOKEN.findall(t)
     total = 0.0
     n_hits = 0
     # phrase matching with negation / modifier context

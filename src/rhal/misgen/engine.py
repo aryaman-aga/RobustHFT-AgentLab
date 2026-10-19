@@ -20,6 +20,7 @@ identical documents, and with feedback on they differ only where the learned
 strategy probabilities differ. A single sequential stream would desynchronise after
 the first differing accept/reject and turn every later draw into fresh noise.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -90,7 +91,13 @@ class MisGenEngine:
         # max_tries and keep the one whose lexicon sentiment best agrees ("aligned") or disagrees
         # ("conflict") with the day's public market evidence s_mkt. "none" = the paper's attacker.
         self.evidence_aware = evidence_aware
-        self.filter = QualityFilter(SimilarityEvaluator(background_corpus), detector, tau_sim, detector.threshold if tau_det is None else tau_det, enabled=use_filter)
+        self.filter = QualityFilter(
+            SimilarityEvaluator(background_corpus),
+            detector,
+            tau_sim,
+            detector.threshold if tau_det is None else tau_det,
+            enabled=use_filter,
+        )
         self.s_bias = StrategySampler(BIAS_TYPES, alpha, use_feedback)
         self.s_minor = StrategySampler(MINOR_TYPES, alpha, use_feedback)
         self.s_rewrite = StrategySampler(REWRITE_TYPES, alpha, use_feedback)
@@ -127,7 +134,9 @@ class MisGenEngine:
             g = rng(self.seed, "item", date, item.id)  # this item's own stream, shared by all arms
             if self.placebo:
                 text = apply_placebo(item.text, g)
-                out.append(self._mk(item, text, date, k, {"bias": None, "minor": "placebo", "rewrite": None}, "placebo"))
+                out.append(
+                    self._mk(item, text, date, k, {"bias": None, "minor": "placebo", "rewrite": None}, "placebo")
+                )
                 continue
             accepted = None
             cands: list[tuple[str, dict, bool]] = []  # (text, strategy, via_rewrite); aware mode keeps them all
@@ -174,7 +183,11 @@ class MisGenEngine:
         align = [float(np.sign(s_mkt)) * score_sentiment(c[0]) for c in cands]
         i = int(np.argmax([direction * a for a in align])) if direction != 0 else 0
         text, strat, via = cands[i]
-        return text, {**strat, "aware": self.evidence_aware, "s_mkt": round(float(s_mkt), 3), "align": round(align[i], 3)}, via
+        return (
+            text,
+            {**strat, "aware": self.evidence_aware, "s_mkt": round(float(s_mkt), 3), "align": round(align[i], 3)},
+            via,
+        )
 
     def _mk(self, src: NewsItem, text: str, date: str, k: int, strat: dict, prov: str) -> NewsItem:
         return NewsItem(
@@ -208,8 +221,11 @@ class MisGenEngine:
     def summary(self) -> dict:
         st = self.stats
         return {
-            "generated": st.generated, "accepted": st.accepted, "accepted_after_rewrite": st.accepted_after_rewrite,
-            "rejected": st.rejected, "accept_rate": st.accepted / max(st.generated, 1),
+            "generated": st.generated,
+            "accepted": st.accepted,
+            "accepted_after_rewrite": st.accepted_after_rewrite,
+            "rejected": st.rejected,
+            "accept_rate": st.accepted / max(st.generated, 1),
             "mean_sim": float(np.mean(st.sim_scores)) if st.sim_scores else None,
             "mean_det": float(np.mean(st.det_scores)) if st.det_scores else None,
             "history": {"bias": self.history.bias, "minor": self.history.minor, "rewrite": self.history.rewrite},
@@ -221,7 +237,9 @@ class MisGenEngine:
         }
 
 
-def build_detector_training_set(clean_texts: list[str], seed: int, per_type: int | None = None) -> tuple[list[str], list[str]]:
+def build_detector_training_set(
+    clean_texts: list[str], seed: int, per_type: int | None = None
+) -> tuple[list[str], list[str]]:
     """Create (clean, perturbed) lists by applying each Phi_Minor operator to clean text."""
     g = rng(seed, "detector_train")
     perturbed: list[str] = []

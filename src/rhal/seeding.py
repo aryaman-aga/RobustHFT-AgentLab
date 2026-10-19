@@ -5,6 +5,7 @@ and a stable string tag. This guarantees that changing the number of random
 draws in one component (e.g. MisGen) never perturbs another (e.g. data
 generation), which is essential for *paired* clean-vs-injected comparisons.
 """
+
 from __future__ import annotations
 
 import hashlib

@@ -11,6 +11,7 @@ the bias prompt.
 Scores are cached per article text (LLMClient's disk cache plus an in-process memo), so the
 clean twin, the counterfactual agent, the placebo and the frozen arms reuse them.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,11 @@ READER_INSTRUCTIONS = (
     "Give a score from -1 (strongly bearish) through 0 (neutral or unclear) to +1 (strongly bullish). "
     'Answer only with JSON: {"score": <number>}.'
 )
-READER_SCHEMA = {"type": "object", "properties": {"score": {"type": "number", "minimum": -1, "maximum": 1}}, "required": ["score"]}
+READER_SCHEMA = {
+    "type": "object",
+    "properties": {"score": {"type": "number", "minimum": -1, "maximum": 1}},
+    "required": ["score"],
+}
 
 
 class LLMTextScorer:

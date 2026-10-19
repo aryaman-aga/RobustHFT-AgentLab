@@ -2,6 +2,7 @@
 
 The Ollama tests talk to a fake server on 127.0.0.1, so they run offline and fast.
 """
+
 import json
 import re
 import threading
@@ -10,7 +11,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 from rhal.agent.llm_reader import READER_SCHEMA, LLMTextScorer
-from rhal.agent.sentiment import score_sentiment
 from rhal.config import LLMCfg, _llm_from_env
 from rhal.evaluation.experiment import RunSpec, Simulation
 from rhal.llm import MockLLM, OllamaClient, build_client
@@ -115,14 +115,23 @@ class _FakeOllama(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/api/tags":
-            self._send({"models": [{"name": "tiny:latest", "digest": "sha256:abc"}, {"name": "qwen2.5:7b", "digest": "sha256:def"}]})
+            self._send(
+                {
+                    "models": [
+                        {"name": "tiny:latest", "digest": "sha256:abc"},
+                        {"name": "qwen2.5:7b", "digest": "sha256:def"},
+                    ]
+                }
+            )
         else:
             self._send({"error": "not found"}, 404)
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         type(self).requests.append(body)
-        self._send({"model": body["model"], "message": {"role": "assistant", "content": type(self).reply}, "done": True})
+        self._send(
+            {"model": body["model"], "message": {"role": "assistant", "content": type(self).reply}, "done": True}
+        )
 
 
 @pytest.fixture()
@@ -143,7 +152,11 @@ def test_ollama_client_sends_schema_and_greedy_options(fake_ollama, tmp_path):
     assert sc("Nordwind Systems raised guidance.") == 0.25
     req = _FakeOllama.requests[-1]
     assert req["format"] == READER_SCHEMA and req["stream"] is False
-    assert req["options"]["temperature"] == 0.0 and req["options"]["seed"] == 0 and req["options"]["num_predict"] == sc.max_tokens
+    assert (
+        req["options"]["temperature"] == 0.0
+        and req["options"]["seed"] == 0
+        and req["options"]["num_predict"] == sc.max_tokens
+    )
     assert [m["role"] for m in req["messages"]] == ["system", "user"]
     # the same article again is served from the cache: no second request
     n = len(_FakeOllama.requests)

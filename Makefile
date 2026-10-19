@@ -2,8 +2,8 @@
 PY := .venv/bin/python
 PIP := $(PY) -m pip
 
-.PHONY: venv install install-optional data test test-fast pipeline ablation report frontend train-detector paper clean all \
-        llm-setup llm-up llm-down llm-pull
+.PHONY: venv install install-optional data test test-fast format lint pipeline ablation price-impact report frontend train-detector \
+        paper clean all llm-setup llm-up llm-down llm-pull real-data
 
 venv:
 	python3 -m venv .venv
@@ -28,11 +28,29 @@ test:
 test-fast:
 	$(PY) -m pytest tests/ -q -x
 
+# Code style: ruff (installed in .venv by `make install`); configuration in pyproject.toml
+format:
+	.venv/bin/ruff format src scripts tests
+	.venv/bin/ruff check --fix src scripts tests
+
+lint:
+	.venv/bin/ruff format --check src scripts tests
+	.venv/bin/ruff check src scripts tests
+
 pipeline:
 	$(PY) scripts/run_pipeline.py --config configs/default.yaml
 
 ablation:
 	$(PY) scripts/run_ablation.py --config configs/default.yaml
+
+# Stress test: the frozen attack also moves the shared price path (gamma = 0, 1, 2)
+price-impact:
+	$(PY) scripts/run_price_impact.py --config configs/default.yaml
+
+# Real BTC-USD daily prices (yfinance, once) -> data/real/btc_usd.csv; then e.g.
+#   $(PY) scripts/run_pipeline.py --seeds 67 --out outputs/real_btc --set data.source=real --set grounding.analog_scale=auto
+real-data:
+	$(PY) scripts/fetch_real_prices.py
 
 # report.md + paper tables/macros, then the paper's vector figures
 report:

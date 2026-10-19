@@ -4,6 +4,7 @@ Runs *after* the policy and can only make the position smaller or force an exit;
 it never initiates a trade the policy did not ask for (except stop/take-profit).
 Every override is logged so the evaluation can attribute behaviour.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,9 +38,21 @@ class PortfolioState:
 
 
 class RiskLayer:
-    def __init__(self, *, enabled: bool, max_position: float, vol_target: float, stop_loss: float, take_profit: float,
-                 hold_on_conflict: bool, conflict_threshold: float, min_confidence: float, drawdown_throttle: float, allow_short: bool = False,
-                 conflict_mode: str = "hold"):
+    def __init__(
+        self,
+        *,
+        enabled: bool,
+        max_position: float,
+        vol_target: float,
+        stop_loss: float,
+        take_profit: float,
+        hold_on_conflict: bool,
+        conflict_threshold: float,
+        min_confidence: float,
+        drawdown_throttle: float,
+        allow_short: bool = False,
+        conflict_mode: str = "hold",
+    ):
         self.enabled = enabled
         self.max_position = max_position
         self.vol_target = vol_target
@@ -62,7 +75,13 @@ class RiskLayer:
         cur = state.position_frac
         if not self.enabled:
             size = self.max_position
-            target = size if action == Action.BUY else (-size if (action == Action.SELL and self.allow_short) else 0.0) if action == Action.SELL else cur
+            target = (
+                size
+                if action == Action.BUY
+                else (-size if (action == Action.SELL and self.allow_short) else 0.0)
+                if action == Action.SELL
+                else cur
+            )
             return action, float(target), overrides
 
         # 1. stop-loss / take-profit on an open long position (checked at close t, executed t+1 open)

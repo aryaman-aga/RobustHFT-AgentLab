@@ -32,10 +32,11 @@ from that drift rather than from the text. Each day a third, throw-away agent de
 with the SHADOW's memory and portfolio but the treated pool and bias; ASR_cf compares
 its action with the shadow's. It only reads copies, so it cannot change any other result.
 """
+
 from __future__ import annotations
 
 import copy
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
@@ -45,8 +46,8 @@ from ..agent import LLMPolicy, Perceiver, PortfolioState, Profile, RiskLayer, Ru
 from ..agent.llm_reader import LLMTextScorer
 from ..backtest import Backtester
 from ..config import Config
-from ..data.synth import SynthConfig, generate_synthetic_dataset, simulate_news
 from ..data import load_news, load_prices
+from ..data.synth import SynthConfig, generate_synthetic_dataset, simulate_news
 from ..features import build_feature_frame
 from ..features.windows import feature_columns
 from ..grounding import EvidenceBuilder
@@ -96,7 +97,14 @@ class RunResult:
     tape: AttackTape | None = None  # recorded for adaptive (injection='misgen') runs
 
     def to_row(self) -> dict:
-        row = {"arm": self.spec.name, "seed": self.seed, "injection": self.spec.injection, "grounded": self.spec.grounded, "risk": self.spec.risk, "micro": self.spec.micro}
+        row = {
+            "arm": self.spec.name,
+            "seed": self.seed,
+            "injection": self.spec.injection,
+            "grounded": self.spec.grounded,
+            "risk": self.spec.risk,
+            "micro": self.spec.micro,
+        }
         row.update({k: v for k, v in self.metrics.items() if not isinstance(v, dict)})
         return row
 
@@ -116,19 +124,35 @@ class Dataset:
 def prepare_dataset(cfg: Config, seed: int) -> Dataset:
     if cfg.data.source == "synthetic":
         d = generate_synthetic_dataset(
-            SynthConfig(n_days=cfg.data.n_days, news_per_day=cfg.data.news_per_day, intraday=cfg.data.intraday.enabled, bars_per_day=cfg.data.intraday.bars_per_day, symbol=cfg.data.symbol),
+            SynthConfig(
+                n_days=cfg.data.n_days,
+                news_per_day=cfg.data.news_per_day,
+                intraday=cfg.data.intraday.enabled,
+                bars_per_day=cfg.data.intraday.bars_per_day,
+                symbol=cfg.data.symbol,
+            ),
             child_seed(seed, "data"),
         )
         prices, news, intraday = d["prices"], d["news"], d.get("intraday")
     elif cfg.data.source == "real":  # one historical window per seed; template news generated per seed
-        prices = real_window(load_prices(cfg.data.real_prices, repair=True), cfg.data.n_days, cfg.data.eval_days, seed - cfg.seed)
+        prices = real_window(
+            load_prices(cfg.data.real_prices, repair=True), cfg.data.n_days, cfg.data.eval_days, seed - cfg.seed
+        )
         news, intraday = simulate_news(prices, cfg.data.news_per_day, child_seed(seed, "data")), None
     else:
         prices, news, intraday = load_prices(cfg.data.csv_prices), load_news(cfg.data.csv_news), None
     f = cfg.features
     feats = build_feature_frame(
-        prices, intraday, vol_window=f.vol_window, drawdown_window=f.drawdown_window, short_trend=f.short_trend, long_trend=f.long_trend,
-        anomaly_window=f.anomaly_window, micro=True, rv_window=f.micro.rv_window, volume_window=f.micro.volume_window,
+        prices,
+        intraday,
+        vol_window=f.vol_window,
+        drawdown_window=f.drawdown_window,
+        short_trend=f.short_trend,
+        long_trend=f.long_trend,
+        anomaly_window=f.anomaly_window,
+        micro=True,
+        rv_window=f.micro.rv_window,
+        volume_window=f.micro.volume_window,
     )
     feats["close"] = prices["close"].to_numpy()
     return Dataset(prices, news, intraday, feats, prices["date"].tolist())
@@ -144,7 +168,7 @@ def real_window(full: pd.DataFrame, n_days: int, eval_days: int, index: int) -> 
     if n_win < 1:
         raise ValueError(f"real price history has {len(full)} rows, fewer than data.n_days={n_days}")
     end = len(full) - (index % n_win) * eval_days
-    return full.iloc[end - n_days:end].reset_index(drop=True)
+    return full.iloc[end - n_days : end].reset_index(drop=True)
 
 
 def n_real_windows(cfg: Config) -> int:
@@ -154,7 +178,9 @@ def n_real_windows(cfg: Config) -> int:
 
 def train_detector(cfg: Config, seed: int, target_fpr: float = 0.10) -> DetectabilityModel:
     """Train A_det on an independent synthetic corpus (never the evaluation corpus)."""
-    d = generate_synthetic_dataset(SynthConfig(n_days=260, news_per_day=cfg.data.news_per_day), child_seed(seed, "detector_corpus"))
+    d = generate_synthetic_dataset(
+        SynthConfig(n_days=260, news_per_day=cfg.data.news_per_day), child_seed(seed, "detector_corpus")
+    )
     clean, pert = build_detector_training_set(d["news"]["text"].tolist(), seed=child_seed(seed, "detector_train"))
     return DetectabilityModel().fit(clean, pert, target_fpr=target_fpr, seed=child_seed(seed, "detector_fit"))
 
@@ -176,7 +202,9 @@ class Simulation:
         # Text models (retrieval TF-IDF, attacker similarity filter) are fit ONLY on news dated before
         # the evaluation window. Fitting on the whole corpus let future articles' vocabulary/IDF move
         # earlier decisions -- lookahead through text (tests/test_text_nolookahead.py).
-        self.text_background = dataset.news.loc[dataset.news["date"].astype(str) < dataset.dates[self.t0], "text"].tolist()
+        self.text_background = dataset.news.loc[
+            dataset.news["date"].astype(str) < dataset.dates[self.t0], "text"
+        ].tolist()
         self._llm = None  # one LLM client per simulation, shared by every agent (built on first use)
         self._reader: LLMTextScorer | None = None  # reader mode: one text -> score function, shared
         self._filters: dict[float, object] = {}  # detection baseline: one filter per flag rate
@@ -216,8 +244,15 @@ class Simulation:
         One fixed builder for every arm, so the attacker's view does not depend on the defense."""
         if self._attacker_ev is None:
             c = self.cfg.grounding
-            self._attacker_ev = EvidenceBuilder(self.ds.feats, ["z_" + k for k in feature_columns(True)], micro=True,
-                                                window=c.window, horizon=c.horizon, top_k=c.top_k, analog_scale=self.analog_scale)
+            self._attacker_ev = EvidenceBuilder(
+                self.ds.feats,
+                ["z_" + k for k in feature_columns(True)],
+                micro=True,
+                window=c.window,
+                horizon=c.horizon,
+                top_k=c.top_k,
+                analog_scale=self.analog_scale,
+            )
         return self._attacker_ev.build(t).market_signal
 
     # -- LLM plumbing --------------------------------------------------------
@@ -241,24 +276,64 @@ class Simulation:
     def _agent(self, cfg: Config, spec: RunSpec) -> TradingAgent:
         zc = ["z_" + c for c in feature_columns(spec.micro)]
         doc_filter = self.detect_filter(cfg.defense.detect_fpr) if cfg.defense.detect_filter else None
-        retr = Retriever(cfg.retrieval.method, cfg.retrieval.top_k, cfg.retrieval.recency_days, cfg.retrieval.recency_decay, background=self.text_background,
-                         doc_filter=doc_filter)
+        retr = Retriever(
+            cfg.retrieval.method,
+            cfg.retrieval.top_k,
+            cfg.retrieval.recency_days,
+            cfg.retrieval.recency_decay,
+            background=self.text_background,
+            doc_filter=doc_filter,
+        )
         perc = Perceiver(self.ds.feats, retr, self.ds.dates)
-        ev = EvidenceBuilder(self.ds.feats, zc, micro=spec.micro, window=cfg.grounding.window, horizon=cfg.grounding.horizon, top_k=cfg.grounding.top_k,
-                             analog_scale=self.analog_scale) if spec.grounded else None
+        ev = (
+            EvidenceBuilder(
+                self.ds.feats,
+                zc,
+                micro=spec.micro,
+                window=cfg.grounding.window,
+                horizon=cfg.grounding.horizon,
+                top_k=cfg.grounding.top_k,
+                analog_scale=self.analog_scale,
+            )
+            if spec.grounded
+            else None
+        )
         if cfg.agent.mode == "rule":
             policy = RulePolicy(cfg.agent.action_threshold)
         elif cfg.agent.mode == "llm":  # decider mode: the LLM picks the action
             policy = LLMPolicy(self.llm_client(), SurrogatePolicy(cfg.agent.action_threshold))
         else:  # surrogate policy; reader mode swaps the lexicon for an LLM text scorer
-            policy = SurrogatePolicy(cfg.agent.action_threshold, scorer=self.reader() if cfg.agent.text_scorer == "llm" else None,
-                                     text_agg=cfg.agent.text_agg, trim_frac=cfg.agent.trim_frac)
+            policy = SurrogatePolicy(
+                cfg.agent.action_threshold,
+                scorer=self.reader() if cfg.agent.text_scorer == "llm" else None,
+                text_agg=cfg.agent.text_agg,
+                trim_frac=cfg.agent.trim_frac,
+            )
         r = cfg.risk
-        risk = RiskLayer(enabled=spec.risk, max_position=r.max_position, vol_target=r.vol_target, stop_loss=r.stop_loss, take_profit=r.take_profit,
-                         hold_on_conflict=r.hold_on_conflict, conflict_threshold=r.conflict_threshold, min_confidence=r.min_confidence,
-                         drawdown_throttle=r.drawdown_throttle, conflict_mode=r.conflict_mode)
-        return TradingAgent(perceiver=perc, evidence=ev, policy=policy, risk=risk, profile=Profile(symbol=cfg.data.symbol), memory_len=cfg.agent.memory_len,
-                            grounded=spec.grounded, kappa=cfg.grounding.strength, text_weight=cfg.agent.text_weight, adaptive_trust=cfg.agent.adaptive_trust)
+        risk = RiskLayer(
+            enabled=spec.risk,
+            max_position=r.max_position,
+            vol_target=r.vol_target,
+            stop_loss=r.stop_loss,
+            take_profit=r.take_profit,
+            hold_on_conflict=r.hold_on_conflict,
+            conflict_threshold=r.conflict_threshold,
+            min_confidence=r.min_confidence,
+            drawdown_throttle=r.drawdown_throttle,
+            conflict_mode=r.conflict_mode,
+        )
+        return TradingAgent(
+            perceiver=perc,
+            evidence=ev,
+            policy=policy,
+            risk=risk,
+            profile=Profile(symbol=cfg.data.symbol),
+            memory_len=cfg.agent.memory_len,
+            grounded=spec.grounded,
+            kappa=cfg.grounding.strength,
+            text_weight=cfg.agent.text_weight,
+            adaptive_trust=cfg.agent.adaptive_trust,
+        )
 
     def _misgen(self, cfg: Config, spec: RunSpec) -> MisGenEngine | None:
         if spec.injection in ("none", "replay"):
@@ -269,9 +344,20 @@ class Simulation:
         # Every placebo variant uses the "placebo" key, so the same (day, item) gets the same paraphrase.
         key = "misgen" if spec.injection == "misgen" else "placebo"
         return MisGenEngine(
-            seed=child_seed(self.seed, "misgen", key), background_corpus=self.text_background, detector=self.det,
-            bias_prob=m.bias_prob, use_bias=m.use_bias, use_minor=m.use_minor, use_rewrite=m.use_rewrite, use_filter=m.use_filter,
-            use_feedback=m.use_feedback, alpha=m.alpha, delta=m.delta, max_tries=m.max_tries, tau_sim=m.sim_threshold, tau_det=m.det_threshold,
+            seed=child_seed(self.seed, "misgen", key),
+            background_corpus=self.text_background,
+            detector=self.det,
+            bias_prob=m.bias_prob,
+            use_bias=m.use_bias,
+            use_minor=m.use_minor,
+            use_rewrite=m.use_rewrite,
+            use_filter=m.use_filter,
+            use_feedback=m.use_feedback,
+            alpha=m.alpha,
+            delta=m.delta,
+            max_tries=m.max_tries,
+            tau_sim=m.sim_threshold,
+            tau_det=m.det_threshold,
             injection_ratio=1.0 if matched else m.injection_ratio,  # matched: paraphrase exactly the tape's items
             placebo=(spec.injection != "misgen"),
             evidence_aware=m.evidence_aware if spec.injection == "misgen" else "none",
@@ -305,7 +391,11 @@ class Simulation:
                 bias_name = bias.name
                 treated.set_bias(bias)
                 today_clean = [it for it in shadow_pool.items() if it.date == date]
-                s_mkt = self.attacker_market_signal(t) if spec.injection == "misgen" and cfg.misgen.evidence_aware != "none" else None
+                s_mkt = (
+                    self.attacker_market_signal(t)
+                    if spec.injection == "misgen" and cfg.misgen.evidence_aware != "none"
+                    else None
+                )
                 injected = misgen.generate_for_items(today_clean, date, s_mkt=s_mkt)
                 treated_pool.extend(injected)
                 if recorded is not None:
@@ -340,24 +430,63 @@ class Simulation:
             vis = treated_pool.visible(date, cfg.retrieval.recency_days, self.ds.dates)
             vis_syn = sum(1 for it, _ in vis if it.provenance != "clean") / max(len(vis), 1)
             s_steps.append(self._rec(d_s, f_s, s_state, eq_s0, exec_px, 0.0, None, []))
-            t_steps.append(self._rec(d_t, f_t, t_state, eq_t0, exec_px, vis_syn, bias_name, [treated_pool.get(i).strategy for i, p in zip(d_t.retrieved_ids, d_t.retrieved_provenance) if p != "clean"]))
+            t_steps.append(
+                self._rec(
+                    d_t,
+                    f_t,
+                    t_state,
+                    eq_t0,
+                    exec_px,
+                    vis_syn,
+                    bias_name,
+                    [
+                        treated_pool.get(i).strategy
+                        for i, p in zip(d_t.retrieved_ids, d_t.retrieved_provenance)
+                        if p != "clean"
+                    ],
+                )
+            )
             t_steps[-1]["cf_action"] = d_cf.action.value if d_cf is not None else None
             if spec.injection == "misgen":  # only the adaptive attacker learns from feedback
-                retrieved_syn = [treated_pool.get(i) for i, p in zip(d_t.retrieved_ids, d_t.retrieved_provenance) if p != "clean"]
+                retrieved_syn = [
+                    treated_pool.get(i) for i, p in zip(d_t.retrieved_ids, d_t.retrieved_provenance) if p != "clean"
+                ]
                 misgen.update_history(d_t.action != d_s.action, retrieved_syn)
         metrics = compute_metrics(t_steps, s_steps, cfg.backtest.initial_cash)
         return RunResult(spec, self.seed, metrics, t_steps, s_steps, misgen.summary() if misgen else None, recorded)
 
     @staticmethod
-    def _rec(d, f, state: PortfolioState, eq0: float, exec_px: float, vis_syn: float, bias: str | None, strategies: list) -> dict:
+    def _rec(
+        d, f, state: PortfolioState, eq0: float, exec_px: float, vis_syn: float, bias: str | None, strategies: list
+    ) -> dict:
         return {
-            "date": d.date, "action": d.action.value, "confidence": d.confidence, "raw_signal": d.raw_signal, "text_signal": d.text_signal,
-            "market_signal": d.market_signal, "consistency": d.consistency, "target_position": d.target_position, "executed_price": exec_px,
-            "fill_price": f.price, "shares_delta": f.shares_delta, "turnover": f.turnover, "cost_paid": f.fee_paid,
-            "position": state.shares, "cash": state.cash, "equity": state.equity, "daily_return": state.equity / eq0 - 1.0 if eq0 > 0 else 0.0,
-            "retrieved_ids": d.retrieved_ids, "retrieved_provenance": d.retrieved_provenance, "retrieved_strategies": strategies,
-            "visible_synthetic_frac": vis_syn, "bias": bias, "risk_overrides": d.risk_overrides, "rationale": d.rationale,
-            "parse_failed": d.parse_failed, "filter_visible": d.filter_visible, "filter_dropped": d.filter_dropped,
+            "date": d.date,
+            "action": d.action.value,
+            "confidence": d.confidence,
+            "raw_signal": d.raw_signal,
+            "text_signal": d.text_signal,
+            "market_signal": d.market_signal,
+            "consistency": d.consistency,
+            "target_position": d.target_position,
+            "executed_price": exec_px,
+            "fill_price": f.price,
+            "shares_delta": f.shares_delta,
+            "turnover": f.turnover,
+            "cost_paid": f.fee_paid,
+            "position": state.shares,
+            "cash": state.cash,
+            "equity": state.equity,
+            "daily_return": state.equity / eq0 - 1.0 if eq0 > 0 else 0.0,
+            "retrieved_ids": d.retrieved_ids,
+            "retrieved_provenance": d.retrieved_provenance,
+            "retrieved_strategies": strategies,
+            "visible_synthetic_frac": vis_syn,
+            "bias": bias,
+            "risk_overrides": d.risk_overrides,
+            "rationale": d.rationale,
+            "parse_failed": d.parse_failed,
+            "filter_visible": d.filter_visible,
+            "filter_dropped": d.filter_dropped,
         }
 
 
@@ -366,7 +495,11 @@ class Simulation:
 # ---------------------------------------------------------------------------
 def defence_levels(micro_default: bool = True) -> list[tuple[str, bool, bool, bool]]:
     """(name, grounded, risk, micro) for the three defence levels of the main experiment."""
-    return [("none", False, False, False), ("grounded", True, False, micro_default), ("grounded_risk", True, True, micro_default)]
+    return [
+        ("none", False, False, False),
+        ("grounded", True, False, micro_default),
+        ("grounded_risk", True, True, micro_default),
+    ]
 
 
 def standard_arms(micro_default: bool = True) -> list[RunSpec]:
@@ -385,13 +518,19 @@ def frozen_arms(micro_default: bool = True) -> list[RunSpec]:
     frozen__none replays the tape against the agent it was recorded from, so it must
     reproduce injected__none exactly; run_pipeline checks this on every seed.
     """
-    return [RunSpec(name=f"frozen__{d}", injection="replay", grounded=g, risk=r, micro=m) for d, g, r, m in defence_levels(micro_default)]
+    return [
+        RunSpec(name=f"frozen__{d}", injection="replay", grounded=g, risk=r, micro=m)
+        for d, g, r, m in defence_levels(micro_default)
+    ]
 
 
 def matched_placebo_arms(micro_default: bool = True) -> list[RunSpec]:
     """Count-matched placebo, with and without the attack's bias, per defence level (tape of TAPE_SOURCE_ARM)."""
-    return [RunSpec(name=f"{inj}__{d}", injection=inj, grounded=g, risk=r, micro=m)
-            for d, g, r, m in defence_levels(micro_default) for inj in ("placebo_matched", "placebo_bias")]
+    return [
+        RunSpec(name=f"{inj}__{d}", injection=inj, grounded=g, risk=r, micro=m)
+        for d, g, r, m in defence_levels(micro_default)
+        for inj in ("placebo_matched", "placebo_bias")
+    ]
 
 
 TREATED_PREFIXES = ("injected__", "frozen__")  # arms whose placebo partners are placebo*__<suffix>
@@ -429,7 +568,7 @@ def attach_net_asr(rows: list[dict]) -> list[dict]:
         for col, (metric, partner_prefix) in NET_COLUMNS.items():
             partner = None
             if prefix is not None and (partner_prefix not in TAPE_PARTNER_PREFIXES or faces_tape(r["arm"])):
-                partner = by.get((r["seed"], partner_prefix + r["arm"][len(prefix):]))
+                partner = by.get((r["seed"], partner_prefix + r["arm"][len(prefix) :]))
             if partner is not None and metric in r and metric in partner:
                 r[col] = r[metric] - partner[metric]
             else:

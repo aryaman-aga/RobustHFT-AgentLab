@@ -16,6 +16,7 @@ returns the dataset unchanged; gamma = 1 moves the price by one daily sigma per 
 sentiment shift. Features are rebuilt from the moved prices with the usual trailing windows,
 so nothing at day t depends on news or prices after t.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -69,8 +70,17 @@ def impacted_dataset(ds, tape, gamma: float, cfg: Config):
     p["high"] = np.maximum(p["high"] * before_open, p[["open", "close"]].max(axis=1))
     p["low"] = np.minimum(p["low"] * before_open, p[["open", "close"]].min(axis=1))
     f = cfg.features
-    feats = build_feature_frame(p, ds.intraday, vol_window=f.vol_window, drawdown_window=f.drawdown_window, short_trend=f.short_trend,
-                                long_trend=f.long_trend, anomaly_window=f.anomaly_window, micro=True, rv_window=f.micro.rv_window,
-                                volume_window=f.micro.volume_window)
+    feats = build_feature_frame(
+        p,
+        ds.intraday,
+        vol_window=f.vol_window,
+        drawdown_window=f.drawdown_window,
+        short_trend=f.short_trend,
+        long_trend=f.long_trend,
+        anomaly_window=f.anomaly_window,
+        micro=True,
+        rv_window=f.micro.rv_window,
+        volume_window=f.micro.volume_window,
+    )
     feats["close"] = p["close"].to_numpy()
     return Dataset(p, ds.news, ds.intraday, feats, ds.dates)

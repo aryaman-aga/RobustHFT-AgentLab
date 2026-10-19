@@ -23,13 +23,27 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.4", "pytest-cov>=4.1"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff==0.16.10"]
 llm = ["anthropic>=0.30", "openai>=1.30"]
-data = ["yfinance>=0.2.40"]
+data = ["yfinance==1.7.0"]
 embed = ["sentence-transformers>=2.7"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"  # matches requires-python
+extend-exclude = [".claude", "outputs", "paper", "reports", "frontend", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+# E501: long strings and comments are fine once the formatter has run; E731: deliberate one-line
+# lambdas; E402: scripts add src/ to sys.path and select the Agg backend before importing
+ignore = ["E501", "E731", "E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["rhal"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

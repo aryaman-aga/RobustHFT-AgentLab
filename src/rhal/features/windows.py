@@ -3,6 +3,7 @@
 Normalisation is a *trailing* z-score (window = ``norm_window``) so that the
 value at t never depends on rows after t. Full-sample z-scoring would leak.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -55,7 +56,9 @@ def build_feature_frame(
         parts.append(compute_micro_features(prices, intraday, rv_window, volume_window))
     raw = pd.concat(parts, axis=1)
     z = rolling_zscore(raw, window=norm_window).add_prefix("z_")
-    out = pd.concat([prices[["date"]].reset_index(drop=True), raw.reset_index(drop=True), z.reset_index(drop=True)], axis=1)
+    out = pd.concat(
+        [prices[["date"]].reset_index(drop=True), raw.reset_index(drop=True), z.reset_index(drop=True)], axis=1
+    )
     return out
 
 

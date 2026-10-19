@@ -3,6 +3,7 @@
 Provenance labels are mandatory on every news record so that synthetic text
 can never be confused with real text anywhere in the pipeline.
 """
+
 from __future__ import annotations
 
 from enum import Enum

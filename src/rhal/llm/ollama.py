@@ -7,6 +7,7 @@ never leave the computer (CLAUDE.md: offline only; synthetic text stays syntheti
 Decoding is greedy (temperature 0) with a fixed seed, and answers are constrained to a JSON
 schema through Ollama's ``format`` field. The disk cache in ``LLMClient`` makes re-runs exact.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,8 +26,15 @@ _NO_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # neve
 class OllamaClient(LLMClient):
     provider = "ollama"
 
-    def __init__(self, model: str, cache_dir: str | None = None, base_url: str | None = None, timeout: float = 600.0,
-                 options: dict | None = None, verify: bool = True):
+    def __init__(
+        self,
+        model: str,
+        cache_dir: str | None = None,
+        base_url: str | None = None,
+        timeout: float = 600.0,
+        options: dict | None = None,
+        verify: bool = True,
+    ):
         super().__init__(model, cache_dir)
         self.base_url = (base_url or "http://127.0.0.1:11434").rstrip("/")
         host = urlparse(self.base_url).hostname
@@ -39,7 +47,9 @@ class OllamaClient(LLMClient):
     # -- HTTP -----------------------------------------------------------------
     def _request(self, method: str, path: str, body: dict | None = None) -> dict:
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(self.base_url + path, data=data, method=method, headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(
+            self.base_url + path, data=data, method=method, headers={"Content-Type": "application/json"}
+        )
         try:
             with _NO_PROXY.open(req, timeout=self.timeout) as r:
                 return json.loads(r.read().decode())
@@ -47,7 +57,9 @@ class OllamaClient(LLMClient):
             detail = e.read().decode(errors="replace")[:300]
             raise RuntimeError(f"Ollama {method} {path} failed: HTTP {e.code} {detail}") from e
         except urllib.error.URLError as e:
-            raise ConnectionError(f"cannot reach Ollama at {self.base_url} ({e.reason}); start it with: make llm-up") from e
+            raise ConnectionError(
+                f"cannot reach Ollama at {self.base_url} ({e.reason}); start it with: make llm-up"
+            ) from e
 
     def _verify(self) -> str:
         """Fail early (and loudly) if the server is down or the model has not been pulled."""
@@ -57,7 +69,9 @@ class OllamaClient(LLMClient):
             models = {m.get("name", ""): m.get("digest", "") for m in tags.get("models", [])}
             name = self.model if ":" in self.model else f"{self.model}:latest"
             if name not in models:
-                raise RuntimeError(f"model {self.model!r} is not available in Ollama; run: make llm-pull LLM_MODELS={self.model}")
+                raise RuntimeError(
+                    f"model {self.model!r} is not available in Ollama; run: make llm-pull LLM_MODELS={self.model}"
+                )
             _VERIFIED[key] = models[name]
         return _VERIFIED[key]
 

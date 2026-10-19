@@ -40,12 +40,16 @@ def test_news_is_informative_and_labelled(synth):
 
 
 def test_validators_reject_bad_frames():
-    bad = pd.DataFrame({"date": ["2024-01-01"], "open": [1.0], "high": [0.5], "low": [0.9], "close": [1.0], "volume": [1]})
+    bad = pd.DataFrame(
+        {"date": ["2024-01-01"], "open": [1.0], "high": [0.5], "low": [0.9], "close": [1.0], "volume": [1]}
+    )
     with pytest.raises(ValueError):
         validate_prices(bad)
     with pytest.raises(ValueError):
         validate_prices(pd.DataFrame({"date": ["2024-01-01"], "open": [1.0]}))
     with pytest.raises(ValueError):
-        validate_news(pd.DataFrame({"id": ["a", "a"], "date": ["2024-01-01"] * 2, "text": ["long enough text here"] * 2}))
+        validate_news(
+            pd.DataFrame({"id": ["a", "a"], "date": ["2024-01-01"] * 2, "text": ["long enough text here"] * 2})
+        )
     ok = validate_news(pd.DataFrame({"id": ["a"], "date": ["2024-01-01"], "text": ["long enough text here"]}))
     assert ok.loc[0, "provenance"] == "clean"

@@ -6,7 +6,17 @@ from rhal.schemas import Action
 
 
 def _risk(**kw):
-    base = dict(enabled=True, max_position=1.0, vol_target=0.015, stop_loss=0.06, take_profit=0.12, hold_on_conflict=True, conflict_threshold=0.6, min_confidence=0.3, drawdown_throttle=0.10)
+    base = dict(
+        enabled=True,
+        max_position=1.0,
+        vol_target=0.015,
+        stop_loss=0.06,
+        take_profit=0.12,
+        hold_on_conflict=True,
+        conflict_threshold=0.6,
+        min_confidence=0.3,
+        drawdown_throttle=0.10,
+    )
     base.update(kw)
     return RiskLayer(**base)
 

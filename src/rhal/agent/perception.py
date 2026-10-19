@@ -1,4 +1,5 @@
 """Perception: convert raw market rows + retrieved text into a structured observation."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -46,5 +47,15 @@ class Perceiver:
 
         docs = self.retriever.retrieve(pool, query, str(row["date"]), self.all_dates)
         fil = self.retriever.doc_filter is not None
-        return Observation(t=t, date=str(row["date"]), close=fv("close"), ret_1=fv("ret_1"), vol_5=fv("vol_5"), dd_20=fv("dd_20"), docs=docs, evidence=evidence,
-                           filter_visible=list(self.retriever.last_visible) if fil else [], filter_dropped=list(self.retriever.last_dropped) if fil else [])
+        return Observation(
+            t=t,
+            date=str(row["date"]),
+            close=fv("close"),
+            ret_1=fv("ret_1"),
+            vol_5=fv("vol_5"),
+            dd_20=fv("dd_20"),
+            docs=docs,
+            evidence=evidence,
+            filter_visible=list(self.retriever.last_visible) if fil else [],
+            filter_dropped=list(self.retriever.last_dropped) if fil else [],
+        )

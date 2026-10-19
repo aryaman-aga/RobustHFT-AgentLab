@@ -17,6 +17,7 @@ ASR_cf (ours)       : one-step counterfactual ASR. Share of steps where a throw-
                       ASR it cannot be inflated by the treated agent's drifted state.
                       Needs ``cf_action`` in the treated step records.
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -57,13 +58,19 @@ def attack_metrics(treated: list[dict], shadow: list[dict]) -> dict:
     flips = [a["action"] != b["action"] for a, b in zip(treated, shadow)]
     # position_gap: how far the attack moved the position (fraction of equity), not just the label;
     # captures size effects that ASR misses (e.g. risk.conflict_mode=shrink)
-    gap = [abs(a["target_position"] - b["target_position"]) for a, b in zip(treated, shadow) if "target_position" in a and "target_position" in b]
+    gap = [
+        abs(a["target_position"] - b["target_position"])
+        for a, b in zip(treated, shadow)
+        if "target_position" in a and "target_position" in b
+    ]
     exposed = [any(p in ("synthetic", "placebo") for p in s["retrieved_provenance"]) for s in treated]
     asr = float(np.mean(flips)) if flips else 0.0
     active = [f and a["action"] != "Hold" for f, a in zip(flips, treated)]
     asr_active = float(np.mean(active)) if active else 0.0
     asr_exposed = float(np.mean([f for f, e in zip(flips, exposed) if e])) if any(exposed) else 0.0
-    sig_dev = float(np.mean([abs(a["raw_signal"] - b["raw_signal"]) for a, b in zip(treated, shadow)])) if treated else 0.0
+    sig_dev = (
+        float(np.mean([abs(a["raw_signal"] - b["raw_signal"]) for a, b in zip(treated, shadow)])) if treated else 0.0
+    )
     # one-step counterfactual: only when every treated step carries the counterfactual action
     cf_actions = [s.get("cf_action") for s in treated]
     cf: dict = {}

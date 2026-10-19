@@ -13,6 +13,7 @@ gain@g<gamma> (metric gain_net = net ASR of frozen__none - net ASR of frozen__gr
 so the change in grounding's gain across gammas is a paired comparison.
 Outputs under <output_dir>/price_impact/.
 """
+
 from __future__ import annotations
 
 import time
@@ -23,8 +24,16 @@ import pandas as pd
 from _common import base_parser, parse_overrides
 
 from rhal.config import load_config
-from rhal.evaluation.experiment import (TAPE_INJECTIONS, TAPE_SOURCE_ARM, RunSpec, Simulation, attach_net_asr, defence_levels, prepare_dataset,
-                                       train_detector)
+from rhal.evaluation.experiment import (
+    TAPE_INJECTIONS,
+    TAPE_SOURCE_ARM,
+    RunSpec,
+    Simulation,
+    attach_net_asr,
+    defence_levels,
+    prepare_dataset,
+    train_detector,
+)
 from rhal.evaluation.impact import impacted_dataset, sentiment_shifts
 from rhal.evaluation.report import write_tables
 from rhal.misgen import DetectabilityModel
@@ -33,7 +42,13 @@ from rhal.utils.logging import get_logger
 
 log = get_logger("price_impact")
 GAMMAS = (0.0, 1.0, 2.0)  # daily sigmas of price move per unit of summed sentiment shift
-KINDS = (("clean", "none"), ("placebo", "placebo"), ("placebo_matched", "placebo_matched"), ("placebo_bias", "placebo_bias"), ("frozen", "replay"))
+KINDS = (
+    ("clean", "none"),
+    ("placebo", "placebo"),
+    ("placebo_matched", "placebo_matched"),
+    ("placebo_bias", "placebo_bias"),
+    ("frozen", "replay"),
+)
 
 
 def main() -> None:
@@ -58,7 +73,10 @@ def main() -> None:
             sim = Simulation(cfg, impacted_dataset(ds, tape, g, cfg), det, seed)
             for level, grounded, risk, micro in defence_levels():
                 for kind, inj in KINDS:
-                    r = sim.run(RunSpec(f"{kind}__{level}@g{g}", inj, grounded, risk, micro), tape=tape if inj in TAPE_INJECTIONS else None)
+                    r = sim.run(
+                        RunSpec(f"{kind}__{level}@g{g}", inj, grounded, risk, micro),
+                        tape=tape if inj in TAPE_INJECTIONS else None,
+                    )
                     rows.append(r.to_row())
         log.info(f"seed={seed} done ({time.time() - t_all:.0f}s)")
     rows = attach_net_asr(rows)
@@ -69,8 +87,15 @@ def main() -> None:
             gain = net[(seed, f"frozen__none@g{g}")] - net[(seed, f"frozen__grounded@g{g}")]
             rows.append({"arm": f"gain@g{g}", "seed": seed, "gain_net": gain})
     write_tables(rows, out, "price_impact")  # the runs CSV includes the derived gain rows
-    save_json({"gammas": list(GAMMAS), "attack_days": len(shifts), "abs_shift_median": float(np.median(shifts)),
-               "abs_shift_p90": float(np.quantile(shifts, 0.9))}, out / "impact_meta.json")
+    save_json(
+        {
+            "gammas": list(GAMMAS),
+            "attack_days": len(shifts),
+            "abs_shift_median": float(np.median(shifts)),
+            "abs_shift_p90": float(np.quantile(shifts, 0.9)),
+        },
+        out / "impact_meta.json",
+    )
     log.info(f"{len(rows)} rows in {time.time() - t_all:.1f}s -> {out}")
 
 

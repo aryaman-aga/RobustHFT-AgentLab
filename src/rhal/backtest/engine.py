@@ -7,6 +7,7 @@ Invariants (tested):
 * a round trip with costs strictly reduces equity by fees + slippage.
 No broker, no live data, ever.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,7 +26,9 @@ class Fill:
 
 
 class Backtester:
-    def __init__(self, *, fee_bps: float = 10.0, slippage_bps: float = 5.0, allow_short: bool = False, min_notional: float = 1.0):
+    def __init__(
+        self, *, fee_bps: float = 10.0, slippage_bps: float = 5.0, allow_short: bool = False, min_notional: float = 1.0
+    ):
         self.fee_bps = fee_bps
         self.slippage_bps = slippage_bps
         self.allow_short = allow_short

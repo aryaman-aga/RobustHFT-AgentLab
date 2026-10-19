@@ -5,6 +5,7 @@ re-runs free. The key hashes everything that can change a completion: provider, 
 decoding options, the requested JSON schema, the token budget and both prompts. Changing
 any of them is a cache miss, never a silently reused answer.
 """
+
 from __future__ import annotations
 
 import json
@@ -51,8 +52,16 @@ class LLMClient(ABC):
         self.misses += 1
         if f is not None:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
-            entry = {"provider": self.provider, "model": self.model, "options": self.options, "schema": schema,
-                     "max_tokens": max_tokens, "system": system, "user": user, "text": text}
+            entry = {
+                "provider": self.provider,
+                "model": self.model,
+                "options": self.options,
+                "schema": schema,
+                "max_tokens": max_tokens,
+                "system": system,
+                "user": user,
+                "text": text,
+            }
             tmp = f.with_suffix(f".tmp{os.getpid()}")
             tmp.write_text(json.dumps(entry))
             os.replace(tmp, f)  # atomic: an interrupted run never leaves a half-written entry

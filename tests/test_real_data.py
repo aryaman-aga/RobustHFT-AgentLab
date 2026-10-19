@@ -2,6 +2,7 @@
 
 Uses a synthetic stand-in CSV, so the tests need no network and no downloaded data.
 """
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -22,12 +23,22 @@ def real_csv(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def real_cfg(small_cfg, real_csv):
-    return small_cfg.with_overrides({"data.source": "real", "data.real_prices": real_csv, "data.n_days": 180, "data.eval_days": 12})
+    return small_cfg.with_overrides(
+        {"data.source": "real", "data.real_prices": real_csv, "data.n_days": 180, "data.eval_days": 12}
+    )
 
 
 def test_repair_fixes_float_noise_and_rejects_real_errors():
-    df = pd.DataFrame({"date": ["2024-01-01", "2024-01-02", "2024-01-03"], "open": [100.0, 101.0, 102.0],
-                       "high": [101.0, 100.9999, 103.0], "low": [99.0, 100.5, 101.0], "close": [100.5, 101.0, 102.5], "volume": [1e6, 1e6, 1e6]})
+    df = pd.DataFrame(
+        {
+            "date": ["2024-01-01", "2024-01-02", "2024-01-03"],
+            "open": [100.0, 101.0, 102.0],
+            "high": [101.0, 100.9999, 103.0],
+            "low": [99.0, 100.5, 101.0],
+            "close": [100.5, 101.0, 102.5],
+            "volume": [1e6, 1e6, 1e6],
+        }
+    )
     with pytest.raises(ValueError):
         validate_prices(df)  # strict mode: high 100.9999 < open 101
     fixed = validate_prices(df, repair=True)
@@ -43,7 +54,9 @@ def test_repair_fixes_float_noise_and_rejects_real_errors():
 
 
 def test_real_windows_are_distinct_and_deterministic():
-    full = pd.DataFrame({"date": pd.date_range("2020-01-01", periods=500).strftime("%Y-%m-%d"), "close": np.arange(500.0)})
+    full = pd.DataFrame(
+        {"date": pd.date_range("2020-01-01", periods=500).strftime("%Y-%m-%d"), "close": np.arange(500.0)}
+    )
     w = [real_window(full, 200, 50, i) for i in range(8)]
     n_win = (500 - 200) // 50 + 1
     ends = [x["date"].iloc[-1] for x in w[:n_win]]
@@ -67,7 +80,7 @@ def test_auto_analog_scale_uses_only_pre_window_prices(real_cfg, detector):
     ds = prepare_dataset(cfg, 42)
     sim = Simulation(cfg, ds, detector, 42)
     prices = ds.prices.copy()
-    prices.loc[sim.t0 + 1:, ["open", "high", "low", "close"]] *= 3.0  # change every price after t0
+    prices.loc[sim.t0 + 1 :, ["open", "high", "low", "close"]] *= 3.0  # change every price after t0
     mutated = Dataset(prices, ds.news, ds.intraday, ds.feats, ds.dates)
     assert Simulation(cfg, mutated, detector, 42).analog_scale == sim.analog_scale
     assert 0.0 < sim.analog_scale < 0.5
@@ -75,5 +88,7 @@ def test_auto_analog_scale_uses_only_pre_window_prices(real_cfg, detector):
 
 def test_real_mode_runs_end_to_end(real_cfg, detector):
     cfg = real_cfg.with_overrides({"grounding.analog_scale": "auto"})
-    r = Simulation(cfg, prepare_dataset(cfg, 42), detector, 42).run(RunSpec("injected__grounded", "misgen", True, False, True))
+    r = Simulation(cfg, prepare_dataset(cfg, 42), detector, 42).run(
+        RunSpec("injected__grounded", "misgen", True, False, True)
+    )
     assert 0.0 <= r.metrics["ASR"] <= 1.0 and r.metrics["MER"] > 0

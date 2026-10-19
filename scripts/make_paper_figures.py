@@ -14,6 +14,7 @@ Writes (vector PDF, embedded TrueType fonts, IEEE column 3.5 in / page 7.16 in):
   paper/tables/tab_main.tex            compact main-results table
   paper/tables/figmacros.tex           numbers quoted in the prose that only these figures compute
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,7 +26,14 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from _common import ROOT, base_parser, parse_overrides  # noqa: E402
-from make_report_tables import REPLICATIONS, ablation_comparisons, control_comparisons, impact_comparisons, main_comparisons, replication_comparisons  # noqa: E402
+from make_report_tables import (  # noqa: E402
+    REPLICATIONS,
+    ablation_comparisons,
+    control_comparisons,
+    impact_comparisons,
+    main_comparisons,
+    replication_comparisons,
+)
 
 from rhal.config import load_config  # noqa: E402
 from rhal.evaluation.stats import compare  # noqa: E402
@@ -37,14 +45,37 @@ FLIP = "#ec835a"  # status "serious": always paired with a label
 INK, INK2, MUTED, GRID = "#0b0b0b", "#52514e", "#898781", "#e1e0d9"
 COL, PAGE = 3.5, 7.16  # IEEE column and text widths (in)
 
-plt.rcParams.update({
-    "font.family": "serif", "font.serif": ["TeX Gyre Termes", "Times New Roman", "Times", "STIXGeneral", "DejaVu Serif"],
-    "mathtext.fontset": "stix", "font.size": 8, "axes.labelsize": 8, "axes.titlesize": 8, "xtick.labelsize": 7, "ytick.labelsize": 7,
-    "legend.fontsize": 7, "axes.linewidth": 0.6, "xtick.major.width": 0.6, "ytick.major.width": 0.6, "xtick.major.size": 2.5,
-    "ytick.major.size": 2.5, "lines.linewidth": 1.0, "axes.spines.top": False, "axes.spines.right": False,
-    "axes.edgecolor": INK2, "axes.labelcolor": INK, "xtick.color": INK2, "ytick.color": INK2, "text.color": INK,
-    "pdf.fonttype": 42, "ps.fonttype": 42, "savefig.bbox": "tight", "savefig.pad_inches": 0.02, "figure.dpi": 150,
-})
+plt.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.serif": ["TeX Gyre Termes", "Times New Roman", "Times", "STIXGeneral", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+        "font.size": 8,
+        "axes.labelsize": 8,
+        "axes.titlesize": 8,
+        "xtick.labelsize": 7,
+        "ytick.labelsize": 7,
+        "legend.fontsize": 7,
+        "axes.linewidth": 0.6,
+        "xtick.major.width": 0.6,
+        "ytick.major.width": 0.6,
+        "xtick.major.size": 2.5,
+        "ytick.major.size": 2.5,
+        "lines.linewidth": 1.0,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.edgecolor": INK2,
+        "axes.labelcolor": INK,
+        "xtick.color": INK2,
+        "ytick.color": INK2,
+        "text.color": INK,
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+        "savefig.bbox": "tight",
+        "savefig.pad_inches": 0.02,
+        "figure.dpi": 150,
+    }
+)
 
 
 def stats_for(root: Path) -> pd.DataFrame:
@@ -52,7 +83,15 @@ def stats_for(root: Path) -> pd.DataFrame:
     frames = []
     pipe = pd.read_csv(root / "pipeline" / "pipeline_runs.csv")
     frames += [compare(pipe, main_comparisons()), compare(pipe, control_comparisons())]
-    for group in ("attack", "defense", "retrieval", "grounding_strength", "baselines", "aware_attack", "conflict_handling"):
+    for group in (
+        "attack",
+        "defense",
+        "retrieval",
+        "grounding_strength",
+        "baselines",
+        "aware_attack",
+        "conflict_handling",
+    ):
         f = root / "ablation" / group / f"ablation_{group}_runs.csv"
         if f.exists():
             frames.append(compare(pd.read_csv(f), ablation_comparisons(group)))
@@ -82,17 +121,44 @@ def save(fig, name: str) -> None:
 # ---------------------------------------------------------------------------
 def fig_decomposition(summ: pd.DataFrame, st: pd.DataFrame) -> None:
     levels = [("none", "No defense"), ("grounded", "Grounding"), ("grounded_risk", "Grounding + risk")]
-    parts = [("Retrieval noise (placebo)", BLUE), ("Article count", ORANGE), ("Bias prompts", AQUA), ("Misinformation content", YELLOW)]
+    parts = [
+        ("Retrieval noise (placebo)", BLUE),
+        ("Article count", ORANGE),
+        ("Bias prompts", AQUA),
+        ("Misinformation content", YELLOW),
+    ]
     fig, ax = plt.subplots(figsize=(COL, 1.55))
     for row, (d, name) in enumerate(levels):
         y = len(levels) - 1 - row
-        vals = [100 * summ.loc[f"placebo__{d}", "ASR_mean"], pp(st, f"dec_count_{d}")[0], pp(st, f"dec_bias_{d}")[0], pp(st, f"dec_meaning_{d}")[0]]
+        vals = [
+            100 * summ.loc[f"placebo__{d}", "ASR_mean"],
+            pp(st, f"dec_count_{d}")[0],
+            pp(st, f"dec_bias_{d}")[0],
+            pp(st, f"dec_meaning_{d}")[0],
+        ]
         left = 0.0
         for (label, color), v in zip(parts, vals):
             w = max(v, 0.0)
-            ax.barh(y, w, left=left, height=0.62, color=color, edgecolor="white", linewidth=0.8, label=label if row == 0 else None)
+            ax.barh(
+                y,
+                w,
+                left=left,
+                height=0.62,
+                color=color,
+                edgecolor="white",
+                linewidth=0.8,
+                label=label if row == 0 else None,
+            )
             if w >= 2.6:
-                ax.text(left + w / 2, y, f"{v:.1f}", ha="center", va="center", fontsize=6.5, color="white" if color in (BLUE, ORANGE) else INK)
+                ax.text(
+                    left + w / 2,
+                    y,
+                    f"{v:.1f}",
+                    ha="center",
+                    va="center",
+                    fontsize=6.5,
+                    color="white" if color in (BLUE, ORANGE) else INK,
+                )
             left += v  # signed: a tiny negative count component overlaps the placebo bar, so the bar ends at the ASR
         ax.text(left + 0.6, y, f"{100 * summ.loc[f'frozen__{d}', 'ASR_mean']:.1f}%", va="center", fontsize=7, color=INK)
     ax.set_yticks(range(len(levels)), [n for _, n in reversed(levels)])
@@ -102,7 +168,15 @@ def fig_decomposition(summ: pd.DataFrame, st: pd.DataFrame) -> None:
     ax.spines["left"].set_visible(False)
     ax.xaxis.grid(True, color=GRID, linewidth=0.5)
     ax.set_axisbelow(True)
-    ax.legend(ncol=2, loc="lower center", bbox_to_anchor=(0.45, 1.0), frameon=False, handlelength=1.0, columnspacing=1.0, handletextpad=0.4)
+    ax.legend(
+        ncol=2,
+        loc="lower center",
+        bbox_to_anchor=(0.45, 1.0),
+        frameon=False,
+        handlelength=1.0,
+        columnspacing=1.0,
+        handletextpad=0.4,
+    )
     save(fig, "fig_decomposition.pdf")
 
 
@@ -110,7 +184,15 @@ def _forest(ax, rows: list[tuple[str, tuple]], title: str, xlabel: str) -> None:
     ys = np.arange(len(rows))[::-1]
     for y, (label, (m, lo, hi, sig)) in zip(ys, rows):
         ax.plot([lo, hi], [y, y], color=INK if sig else MUTED, linewidth=1.0, solid_capstyle="butt")
-        ax.plot(m, y, marker="o", markersize=3.6, markerfacecolor=INK if sig else "white", markeredgecolor=INK if sig else MUTED, markeredgewidth=0.9)
+        ax.plot(
+            m,
+            y,
+            marker="o",
+            markersize=3.6,
+            markerfacecolor=INK if sig else "white",
+            markeredgecolor=INK if sig else MUTED,
+            markeredgewidth=0.9,
+        )
     ax.axvline(0, color=INK2, linewidth=0.6, linestyle=(0, (2, 2)))
     ax.set_yticks(ys, [r[0] for r in rows])
     ax.tick_params(axis="y", length=0)
@@ -125,8 +207,13 @@ def fig_forest(st: pd.DataFrame) -> None:
     """Defense components only (the attack-component ablations are in the appendix tables)."""
     has = lambda k: k in st.index  # noqa: E731
     # "+" rows add one component to the configuration above it, as in the ablation comparisons
-    dfn = [("Price-only grounding", "grounding"), ("+ microstructure proxies", "micro"), ("Risk layer alone", "risk_alone"),
-           ("+ risk layer on grounding", "risk_on_top"), ("+ hold-on-conflict rule", "hold")]
+    dfn = [
+        ("Price-only grounding", "grounding"),
+        ("+ microstructure proxies", "micro"),
+        ("Risk layer alone", "risk_alone"),
+        ("+ risk layer on grounding", "risk_on_top"),
+        ("+ hold-on-conflict rule", "hold"),
+    ]
     rows = []
     for name, k in dfn:
         for setting in ("adaptive", "frozen"):
@@ -143,12 +230,18 @@ def fig_forest(st: pd.DataFrame) -> None:
 
 # (label, key) rows of the generalization figure; rows whose run is missing are skipped
 GENERALIZATION = [
-    ("Lexicon reader, adaptive", "gain_adaptive_grounded_net"), ("Lexicon reader, frozen", "gain_frozen_grounded_net"),
-    ("LLM reader, adaptive", "llmr_gain_adaptive_grounded_net"), ("LLM reader, frozen", "llmr_gain_frozen_grounded_net"),
-    ("LLM decider (prompt), adaptive", "llmd_gain_adaptive_grounded_net"), ("LLM decider (prompt), frozen", "llmd_gain_frozen_grounded_net"),
-    ("BTC-USD prices, adaptive", "real_gain_adaptive_grounded_net"), ("BTC-USD prices, frozen", "real_gain_frozen_grounded_net"),
-    ("Aligned attacker, adaptive", "aware_adaptive_gain_aligned"), ("Aligned attacker, frozen", "aware_frozen_gain_aligned"),
-    (r"Price impact $\gamma=1$, frozen", "imp_gain_grounded_1.0"), (r"Price impact $\gamma=2$, frozen", "imp_gain_grounded_2.0"),
+    ("Lexicon reader, adaptive", "gain_adaptive_grounded_net"),
+    ("Lexicon reader, frozen", "gain_frozen_grounded_net"),
+    ("LLM reader, adaptive", "llmr_gain_adaptive_grounded_net"),
+    ("LLM reader, frozen", "llmr_gain_frozen_grounded_net"),
+    ("LLM decider (prompt), adaptive", "llmd_gain_adaptive_grounded_net"),
+    ("LLM decider (prompt), frozen", "llmd_gain_frozen_grounded_net"),
+    ("BTC-USD prices, adaptive", "real_gain_adaptive_grounded_net"),
+    ("BTC-USD prices, frozen", "real_gain_frozen_grounded_net"),
+    ("Aligned attacker, adaptive", "aware_adaptive_gain_aligned"),
+    ("Aligned attacker, frozen", "aware_frozen_gain_aligned"),
+    (r"Price impact $\gamma=1$, frozen", "imp_gain_grounded_1.0"),
+    (r"Price impact $\gamma=2$, frozen", "imp_gain_grounded_2.0"),
 ]
 
 
@@ -164,8 +257,13 @@ def fig_generalization(st: pd.DataFrame) -> None:
 
 
 # label offsets (dx, dy, ha) in data units, chosen so no label crosses a marker, a whisker or an axis
-LABEL_AT = {"none": (-0.4, 0.7, "right"), "risk_only": (-0.4, 0.6, "right"), "grounding_only": (0.4, 1.15, "left"),
-            "grounding_micro": (-0.35, -0.95, "right"), "full_defense": (0.45, -0.55, "left")}
+LABEL_AT = {
+    "none": (-0.4, 0.7, "right"),
+    "risk_only": (-0.4, 0.6, "right"),
+    "grounding_only": (0.4, 1.15, "left"),
+    "grounding_micro": (-0.35, -0.95, "right"),
+    "full_defense": (0.45, -0.55, "left"),
+}
 
 
 def fig_frontier(root: Path) -> None:
@@ -173,15 +271,32 @@ def fig_frontier(root: Path) -> None:
     if not dfs.exists():
         return
     d = pd.read_csv(dfs).set_index("arm")
-    pts = [("none", "No defense"), ("risk_only", "Risk only"), ("grounding_only", "Grounding (price)"),
-           ("grounding_micro", "Grounding\n+ micro"), ("full_defense", "Full defense")]
+    pts = [
+        ("none", "No defense"),
+        ("risk_only", "Risk only"),
+        ("grounding_only", "Grounding (price)"),
+        ("grounding_micro", "Grounding\n+ micro"),
+        ("full_defense", "Full defense"),
+    ]
     fig, ax = plt.subplots(figsize=(COL, 2.2))
     for v, label in pts:
         inj, cln = d.loc[f"injected__{v}"], d.loc[f"clean__{v}"]
         x, y = 100 * inj["ASR_net_mean"], 100 * cln["CR_mean"]
         xe = [[x - 100 * inj["ASR_net_ci_lo"]], [100 * inj["ASR_net_ci_hi"] - x]]
         ye = [[y - 100 * cln["CR_ci_lo"]], [100 * cln["CR_ci_hi"] - y]]
-        ax.errorbar(x, y, xerr=xe, yerr=ye, fmt="o", color=BLUE, markersize=3.6, elinewidth=0.8, capsize=1.6, markeredgecolor="white", markeredgewidth=0.5)
+        ax.errorbar(
+            x,
+            y,
+            xerr=xe,
+            yerr=ye,
+            fmt="o",
+            color=BLUE,
+            markersize=3.6,
+            elinewidth=0.8,
+            capsize=1.6,
+            markeredgecolor="white",
+            markeredgewidth=0.5,
+        )
         dx, dy, ha = LABEL_AT.get(v, (0.45, 0.25, "left"))
         ax.annotate(label, (x, y), xytext=(x + dx, y + dy), fontsize=6.8, ha=ha, va="center", color=INK)
     lo = min(100 * d.loc[f"injected__{v}", "ASR_net_ci_lo"] for v, _ in pts)
@@ -214,9 +329,20 @@ def fig_replay(cfg) -> dict:
                 if act == "Hold":
                     continue
                 up = act == "Buy"
-                ax.plot(x[i], px[i] + (1 if up else -1) * off * span, marker="^" if up else "v", markersize=3.4 if who == "a" else 3.0,
-                        color=BUY if up else SELL, markeredgecolor=BUY if up else SELL, linestyle="none", zorder=3, **kw)
-        ax.set_title(f"{title}: {len(flips)} of {len(steps)} decisions flipped", loc="left", fontsize=8, fontweight="bold")
+                ax.plot(
+                    x[i],
+                    px[i] + (1 if up else -1) * off * span,
+                    marker="^" if up else "v",
+                    markersize=3.4 if who == "a" else 3.0,
+                    color=BUY if up else SELL,
+                    markeredgecolor=BUY if up else SELL,
+                    linestyle="none",
+                    zorder=3,
+                    **kw,
+                )
+        ax.set_title(
+            f"{title}: {len(flips)} of {len(steps)} decisions flipped", loc="left", fontsize=8, fontweight="bold"
+        )
         ax.set_xlabel("Trading day")
         ax.set_xlim(0, len(steps) + 1)
         ax.grid(True, axis="y", color=GRID, linewidth=0.5)
@@ -224,14 +350,39 @@ def fig_replay(cfg) -> dict:
     axes[0].set_ylabel("Price")
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
-    handles = [Line2D([], [], marker="^", color=BUY, linestyle="none", markersize=3.6, label="agent buys"),
-               Line2D([], [], marker="v", color=SELL, linestyle="none", markersize=3.6, label="agent sells"),
-               Line2D([], [], marker="^", color=BUY, markerfacecolor="white", linestyle="none", markersize=3.4, label="clean twin (outline)"),
-               Patch(color=FLIP, alpha=0.4, label="flip: decisions differ")]
-    fig.legend(handles=handles, ncol=4, loc="lower center", bbox_to_anchor=(0.5, 1.0), frameon=False, handletextpad=0.3, columnspacing=1.4)
+
+    handles = [
+        Line2D([], [], marker="^", color=BUY, linestyle="none", markersize=3.6, label="agent buys"),
+        Line2D([], [], marker="v", color=SELL, linestyle="none", markersize=3.6, label="agent sells"),
+        Line2D(
+            [],
+            [],
+            marker="^",
+            color=BUY,
+            markerfacecolor="white",
+            linestyle="none",
+            markersize=3.4,
+            label="clean twin (outline)",
+        ),
+        Patch(color=FLIP, alpha=0.4, label="flip: decisions differ"),
+    ]
+    fig.legend(
+        handles=handles,
+        ncol=4,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.0),
+        frameon=False,
+        handletextpad=0.3,
+        columnspacing=1.4,
+    )
     save(fig, "fig_replay.pdf")
     flips = {arm: sum(s["a"] != s["s"] for s in rp["arms"][arm]) for arm, _ in panels}
-    return {"ReplaySeed": str(rp["seed"]), "ReplayDays": str(rp["days"]), "ReplayFlipsNone": str(flips["attack"]), "ReplayFlipsGrounded": str(flips["grounded"])}
+    return {
+        "ReplaySeed": str(rp["seed"]),
+        "ReplayDays": str(rp["days"]),
+        "ReplayFlipsNone": str(flips["attack"]),
+        "ReplayFlipsGrounded": str(flips["grounded"]),
+    }
 
 
 def tex_num(x: float, plus: bool = False) -> str:
@@ -243,20 +394,30 @@ def tab_main(summ: pd.DataFrame, st: pd.DataFrame) -> None:
     def ci(key: str) -> str:
         m, lo, hi, _ = pp(st, key)
         return f"{tex_num(m)} [{tex_num(lo)}, {tex_num(hi)}]"
+
     rows = [("No defense", "none"), ("Grounding", "grounded"), ("Grounding + risk", "grounded_risk")]
-    lines = [r"\begin{table*}[t]", r"\centering",
-             r"\caption{Main results over \val{NseedsRun} paired seeds (\%). Net ASR $=$ ASR $-$ ASR of the paraphrase placebo, with 95\% bootstrap CIs. "
-             r"\emph{Adaptive}: MisGen's feedback loop runs against the defended agent. \emph{Frozen}: the attack recorded against the undefended agent is replayed verbatim. "
-             r"Clean return is the paired clean agent's cumulative return over the 60-day window; drawdown is the attacked agent's maximum drawdown.}",
-             r"\label{tab:main}", r"\small", r"\setlength{\tabcolsep}{4.5pt}",
-             r"\begin{tabular}{@{}lrrrrrrr@{}}", r"\toprule",
-             r"Defense & MER & ASR & Placebo ASR & Net ASR (adaptive) & Net ASR (frozen) & Clean return & Drawdown \\", r"\midrule"]
+    lines = [
+        r"\begin{table*}[t]",
+        r"\centering",
+        r"\caption{Main results over \val{NseedsRun} paired seeds (\%). Net ASR $=$ ASR $-$ ASR of the paraphrase placebo, with 95\% bootstrap CIs. "
+        r"\emph{Adaptive}: MisGen's feedback loop runs against the defended agent. \emph{Frozen}: the attack recorded against the undefended agent is replayed verbatim. "
+        r"Clean return is the paired clean agent's cumulative return over the 60-day window; drawdown is the attacked agent's maximum drawdown.}",
+        r"\label{tab:main}",
+        r"\small",
+        r"\setlength{\tabcolsep}{4.5pt}",
+        r"\begin{tabular}{@{}lrrrrrrr@{}}",
+        r"\toprule",
+        r"Defense & MER & ASR & Placebo ASR & Net ASR (adaptive) & Net ASR (frozen) & Clean return & Drawdown \\",
+        r"\midrule",
+    ]
     for name, d in rows:
         # frozen__none replays the tape against the agent it was recorded from, so it equals the adaptive cell exactly
         frozen = ci("net_none") if d == "none" else ci(f"net_frozen_{d}")
-        lines.append(f"{name} & {100 * summ.loc[f'injected__{d}', 'MER_mean']:.1f} & {100 * summ.loc[f'injected__{d}', 'ASR_mean']:.1f} & "
-                     f"{100 * summ.loc[f'placebo__{d}', 'ASR_mean']:.1f} & {ci(f'net_{d}')} & {frozen} & "
-                     f"{tex_num(100 * summ.loc[f'clean__{d}', 'CR_mean'], plus=True)} & {tex_num(100 * summ.loc[f'injected__{d}', 'max_drawdown_mean'])} \\\\")
+        lines.append(
+            f"{name} & {100 * summ.loc[f'injected__{d}', 'MER_mean']:.1f} & {100 * summ.loc[f'injected__{d}', 'ASR_mean']:.1f} & "
+            f"{100 * summ.loc[f'placebo__{d}', 'ASR_mean']:.1f} & {ci(f'net_{d}')} & {frozen} & "
+            f"{tex_num(100 * summ.loc[f'clean__{d}', 'CR_mean'], plus=True)} & {tex_num(100 * summ.loc[f'injected__{d}', 'max_drawdown_mean'])} \\\\"
+        )
     lines += [r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
     out = ROOT / "paper" / "tables" / "tab_main.tex"
     out.write_text("\n".join(lines) + "\n")
@@ -279,12 +440,20 @@ def main() -> None:
     macros = fig_replay(cfg)
     tab_main(summ, st)
     net = summ["ASR_net_mean"]
-    macros["RelCutGroundedNet"] = f"{100 * (1 - net['injected__grounded'] / net['injected__none']):.0f}"  # relative cut in net ASR
-    macros["DecCountMaxAbs"] = f"{max(abs(pp(st, f'dec_count_{d}')[0]) for d in ('none', 'grounded', 'grounded_risk')):.1f}"
-    macros["ShareNoiseOfNaive"] = f"{100 * summ.loc['placebo__none', 'ASR_mean'] / summ.loc['injected__none', 'ASR_mean']:.0f}"
+    macros["RelCutGroundedNet"] = (
+        f"{100 * (1 - net['injected__grounded'] / net['injected__none']):.0f}"  # relative cut in net ASR
+    )
+    macros["DecCountMaxAbs"] = (
+        f"{max(abs(pp(st, f'dec_count_{d}')[0]) for d in ('none', 'grounded', 'grounded_risk')):.1f}"
+    )
+    macros["ShareNoiseOfNaive"] = (
+        f"{100 * summ.loc['placebo__none', 'ASR_mean'] / summ.loc['injected__none', 'ASR_mean']:.0f}"
+    )
     out = ROOT / "paper" / "tables" / "figmacros.tex"
-    out.write_text("% AUTO-GENERATED by scripts/make_paper_figures.py -- do not edit\n"
-                   + "".join(f"\\expandafter\\def\\csname {k}\\endcsname{{{v}}}\n" for k, v in macros.items()))
+    out.write_text(
+        "% AUTO-GENERATED by scripts/make_paper_figures.py -- do not edit\n"
+        + "".join(f"\\expandafter\\def\\csname {k}\\endcsname{{{v}}}\n" for k, v in macros.items())
+    )
     print(f"wrote {out.relative_to(ROOT)}: {macros}")
 
 
