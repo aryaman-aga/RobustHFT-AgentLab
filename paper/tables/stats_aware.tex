@@ -1,0 +1,35 @@
+\begin{table}[t]
+\centering
+\caption{Paired comparisons over seeds for the defense-aware attackers. In \emph{x\_aligned $-$ x} and \emph{x\_conflict $-$ x} rows a positive $\Delta$ means the aware attacker is stronger; in \emph{gain} rows, that it shrinks grounding's gain. Conventions as in Table~\ref{tab:stats_main}.}
+\label{tab:stats_aware}
+\footnotesize
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lrrr}
+\toprule
+Comparison & $\Delta$ (pp) & 95\% CI & $p_{\mathrm{Holm}}$ \\
+\midrule
+\multicolumn{4}{l}{\textit{Grounding's gain against each attacker, adaptive (net ASR)}} \\
+no defense $-$ grounding & +11.0 & [+9.1, +12.9] & \textbf{$<$0.001} \\
+none\_aligned $-$ grounding\_aligned & +11.2 & [+8.9, +13.4] & \textbf{$<$0.001} \\
+gain: standard $-$ aligned attacker & $-$0.2 & [$-$2.4, +2.1] & 0.883 \\
+\midrule
+\multicolumn{4}{l}{\textit{Defense-aware vs standard attacker, adaptive (net ASR)}} \\
+none\_aligned $-$ no defense & +0.7 & [$-$1.4, +2.7] & 1.000 \\
+grounding\_aligned $-$ grounding & +0.5 & [$-$0.7, +1.7] & 1.000 \\
+full\_aligned $-$ full attack & +0.5 & [$-$0.8, +1.8] & 1.000 \\
+full\_conflict $-$ full attack & +5.6 & [+4.1, +7.2] & \textbf{$<$0.001} \\
+\midrule
+\multicolumn{4}{l}{\textit{Grounding's gain against each attacker, frozen (net ASR)}} \\
+no defense $-$ grounding & +10.0 & [+8.3, +11.8] & \textbf{$<$0.001} \\
+none\_aligned $-$ grounding\_aligned & +10.1 & [+8.3, +12.1] & \textbf{$<$0.001} \\
+gain: standard $-$ aligned attacker & $-$0.1 & [$-$1.8, +1.6] & 0.907 \\
+\midrule
+\multicolumn{4}{l}{\textit{Defense-aware vs standard attacker, frozen (net ASR)}} \\
+none\_aligned $-$ no defense & +0.7 & [$-$1.4, +2.7] & 0.820 \\
+grounding\_aligned $-$ grounding & +0.5 & [$-$0.7, +1.8] & 0.820 \\
+full\_aligned $-$ full attack & +1.5 & [$-$0.0, +3.0] & 0.179 \\
+full\_conflict $-$ full attack & +6.4 & [+4.8, +8.0] & \textbf{$<$0.001} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}

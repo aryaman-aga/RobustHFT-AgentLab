@@ -309,7 +309,32 @@ def impact_comparisons() -> list[Comparison]:
         out.append(
             C(f"imp_gain_drop_{g}", fam, f"gain: $\\gamma=0$ $-$ $\\gamma={g}$", "gain_net", "gain@g0.0", f"gain@g{g}")
         )
+    fam = "Price impact: change in the content effect"  # positive = the content effect shrinks as gamma grows
+    for d in ("none", "grounded"):
+        for g in IMPACT_GAMMAS[1:]:
+            out.append(
+                C(
+                    f"imp_meaning_drop_{d}_{g}",
+                    fam,
+                    f"content, {d}: $\\gamma=0$ $-$ $\\gamma={g}$",
+                    "meaning",
+                    f"meaning_{d}@g0.0",
+                    f"meaning_{d}@g{g}",
+                )
+            )
     return out
+
+
+def with_meaning_rows(runs: pd.DataFrame) -> pd.DataFrame:
+    """Add per-seed rows ``meaning_<level>@g<gamma>`` to the price-impact runs (metric meaning = ASR of the
+    frozen attack minus ASR of the bias-matched placebo), so the change in the content effect across gammas
+    is itself a paired comparison."""
+    rows = []
+    for g in IMPACT_GAMMAS:
+        for d in ("none", "grounded"):
+            diff = paired_diffs(runs, "ASR", f"frozen__{d}@g{g}", f"placebo_bias__{d}@g{g}")
+            rows += [{"arm": f"meaning_{d}@g{g}", "seed": s, "meaning": v} for s, v in diff.items()]
+    return pd.concat([runs, pd.DataFrame(rows)], ignore_index=True) if rows else runs
 
 
 def decomposition_tables(full: pd.DataFrame, st: pd.DataFrame) -> tuple[str, str]:
@@ -557,6 +582,27 @@ def with_gain_rows(group: str, runs: pd.DataFrame) -> pd.DataFrame:
             d = paired_diffs(runs, "ASR_net", f"{pre}__none{sfx}", f"{pre}__grounding{sfx}")
             rows += [{"arm": f"gain@{setting}_{kind}", "seed": s, "gain_net": v} for s, v in d.items()]
     return pd.concat([runs, pd.DataFrame(rows)], ignore_index=True) if rows else runs
+
+
+# Ablation groups of the reviewer round, each with its own appendix table: group -> (file/label stem, caption)
+EXT_TABLES = {
+    "baselines": (
+        "stats_baselines",
+        "Paired comparisons over seeds for the baseline defenses (no risk layer). Positive $\\Delta$: the "
+        "second-named variant has the lower value.",
+    ),
+    "aware_attack": (
+        "stats_aware",
+        "Paired comparisons over seeds for the defense-aware attackers. In \\emph{x\\_aligned $-$ x} and "
+        "\\emph{x\\_conflict $-$ x} rows a positive $\\Delta$ means the aware attacker is stronger; in "
+        "\\emph{gain} rows, that it shrinks grounding's gain.",
+    ),
+    "conflict_handling": (
+        "stats_conflict",
+        "Paired comparisons over seeds for the conflict rule of the full layer (hold, shrink or none) against the "
+        "standard and the conflict-seeking attacker. Positive $\\Delta$: the second-named variant has the lower value.",
+    ),
+}
 
 
 # Rows of the main-text baseline table: (variant of the baselines ablation group, label)
@@ -980,7 +1026,7 @@ def main() -> None:
         md.append("")
 
     abl_stats: list[pd.DataFrame] = []
-    ext_stats: list[pd.DataFrame] = []  # baselines + defense-aware attacker: their own appendix table
+    ext_stats: dict[str, pd.DataFrame] = {}  # reviewer-round groups: one appendix table each (EXT_TABLES)
     for group, cols in [
         ("attack", ["MER", "MER_lift", "ASR", "ASR_net", "CR"]),
         ("defense", ["ASR", "ASR_net", "ASR_active_net", "CR", "CR_clean_paired", "max_drawdown", "hold_rate"]),
@@ -1008,17 +1054,15 @@ def main() -> None:
                 if not st.empty:
                     save_csv(st, root / "ablation" / group / f"ablation_{group}_stats.csv")
                     add_stats(st)
-                    (ext_stats if group in ("baselines", "aware_attack", "conflict_handling") else abl_stats).append(st)
+                    if group in EXT_TABLES:
+                        ext_stats[group] = st
+                    else:
+                        abl_stats.append(st)
                     md += [f"### Paired comparisons: {group}", "", stats_markdown(st), ""]
-    if ext_stats:
-        (tex_dir / "stats_extensions.tex").write_text(
-            stats_latex(
-                pd.concat(ext_stats, ignore_index=True),
-                "Paired comparisons over seeds for the baseline defenses and the defense-aware attacker; conventions as in Table~\\ref{tab:stats_main}. "
-                "In \\emph{x\\_aligned $-$ x} and \\emph{x\\_conflict $-$ x} rows a positive $\\Delta$ means the aware attacker is "
-                "stronger; in \\emph{gain} rows, that it shrinks grounding's gain.",
-                "tab:stats_extensions",
-            )
+    for group, st in ext_stats.items():
+        name, caption = EXT_TABLES[group]
+        (tex_dir / f"{name}.tex").write_text(
+            stats_latex(st, caption + " Conventions as in Table~\\ref{tab:stats_main}.", f"tab:{name}")
         )
     if abl_stats:
         (tex_dir / "stats_ablation.tex").write_text(
@@ -1085,7 +1129,7 @@ def main() -> None:
         extra["ImpShiftMedian"] = f"{im['abs_shift_median']:.2f}"
         extra["ImpShiftPNinety"] = f"{im['abs_shift_p90']:.2f}"
     if imp_csv.exists():
-        st = compare(pd.read_csv(imp_csv), impact_comparisons())
+        st = compare(with_meaning_rows(pd.read_csv(imp_csv)), impact_comparisons())
         if not st.empty:
             save_csv(st, root / "price_impact" / "price_impact_stats.csv")
             add_stats(st)
@@ -1112,9 +1156,9 @@ def main() -> None:
             extra[_macro_name(prefix, "model")] = str(ls.get("model", "")).replace("_", "\\_")
             extra[_macro_name(prefix, "parse", "failures")] = str(ls.get("parse_failures", 0))
             if "texts_scored" in ls:
-                extra[_macro_name(prefix, "texts", "scored")] = str(ls["texts_scored"])
+                extra[_macro_name(prefix, "texts", "scored")] = f"{ls['texts_scored']:,}"
             if "cache_misses" in ls:
-                extra[_macro_name(prefix, "llm", "calls")] = str(ls["cache_misses"])
+                extra[_macro_name(prefix, "llm", "calls")] = f"{ls['cache_misses']:,}"
         st = compare(pd.read_csv(rdir / "pipeline_runs.csv"), replication_comparisons(prefix, label))
         if not st.empty:
             save_csv(st, rdir / "pipeline_stats_replication.csv")

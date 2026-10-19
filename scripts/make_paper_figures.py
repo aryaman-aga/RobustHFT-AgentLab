@@ -34,6 +34,7 @@ from make_report_tables import (  # noqa: E402
     main_comparisons,
     replication_comparisons,
     with_gain_rows,
+    with_meaning_rows,
 )
 
 from rhal.config import load_config  # noqa: E402
@@ -98,7 +99,7 @@ def stats_for(root: Path) -> pd.DataFrame:
             frames.append(compare(with_gain_rows(group, pd.read_csv(f)), ablation_comparisons(group)))
     imp = root / "price_impact" / "price_impact_runs.csv"
     if imp.exists():
-        frames.append(compare(pd.read_csv(imp), impact_comparisons()))
+        frames.append(compare(with_meaning_rows(pd.read_csv(imp)), impact_comparisons()))
     for prefix, rel, label in REPLICATIONS:  # local-LLM and real-price replications (own families)
         f = root / rel / "pipeline" / "pipeline_runs.csv"
         if f.exists():
