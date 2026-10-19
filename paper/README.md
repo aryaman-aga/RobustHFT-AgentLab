@@ -7,8 +7,8 @@ Conference manuscript **"RobustHFT-AgentLab: A Defense Layer Against Misinformat
 | `main.tex` | The manuscript. Every number in the prose comes from generated `\val{...}` macros, so it always matches the latest run. |
 | `references.bib` | Bibliography. Every entry was checked against the publisher, the ACL Anthology, NeurIPS proceedings, arXiv or the DOI registry (Oct 2026). Acronyms are brace-protected because IEEEtran sentence-cases titles; an `IEEEtranBSTCTL` entry switches on "first author et al." for more than six authors. |
 | `figures/fig_harness.tex` | TikZ diagram of the defense layer and the paired harness (Fig. 1), drawn at its natural size so its fonts match the caption. Algorithm 1 is written directly in `main.tex`. |
-| `figures/fig_*.pdf` | **Generated** vector figures (Figs. 2--5: frontier, replay, defense components, ASR decomposition) from `scripts/make_paper_figures.py`. |
-| `tables/numbers.tex`, `tables/stats_*.tex`, `tables/detector.tex` | **Generated** by `scripts/make_report_tables.py` from `outputs/`. |
+| `figures/fig_*.pdf` | **Generated** vector figures from `scripts/make_paper_figures.py`: frontier, replay, defense components, ASR decomposition, and `fig_generalization.pdf` (grounding's gain across the LLM reader and decider, real prices, aware attackers and price impact; rows appear as their runs finish). PDFs carry no timestamp, so identical data gives identical files. |
+| `tables/numbers.tex`, `tables/stats_*.tex`, `tables/detector.tex` | **Generated** by `scripts/make_report_tables.py` from `outputs/`: `stats_main`, `stats_controls`, `stats_ablation` (paper so far), plus `stats_extensions` (baselines, aware attackers, conflict rule), `stats_impact` (price impact) and `stats_replications` (LLM reader and decider, BTC-USD) once those runs exist. |
 | `tables/tab_main.tex`, `tables/figmacros.tex` | **Generated** by `scripts/make_paper_figures.py` (Table I and numbers that only the figures compute). |
 | `tables/main_results.tex`, `tables/ablation_*.tex`, `tables/asr_decomposition.tex` | **Generated** mean ± sd tables. `main.tex` does not use them; they are kept for the BTP reports. |
 
@@ -18,13 +18,17 @@ Never hand-edit a generated file: change the script and run `make report`.
 
 `make paper` from the repo root (uses `tectonic` if installed, else `pdflatex` + `bibtex`). The preamble detects the engine: TeX Gyre Termes through fontspec under XeTeX/LuaTeX, newtx under pdfLaTeX, so the same source builds on a submission server. A clean build has no overfull boxes, no undefined citations and no `rhal: missing generated value` warnings; check `main.log` for all three. PDFs are build products and are git-ignored.
 
-Refresh everything after new experiments: `make pipeline ablation report`, then `make paper`.
+Refresh everything after new experiments: `make pipeline ablation price-impact report`, then `make paper`. The LLM and real-price replications are separate runs (see the root README); `make report` picks them up from `outputs/llm/` and `outputs/real_btc/`.
 
 ## Anonymous vs camera-ready
 
 `main.tex` currently prints the authors (`\anonymousfalse`); the e-mail line still reads "TBD". For a double-blind venue set `\anonymoustrue`: it prints "Anonymous Authors" and hides the repository URL. The Reproducibility section points to the GitHub repository, which is private: make it public (or upload an anonymized copy) before submitting.
 
-## Status (100 seeds, leak-free re-run, Oct 2026)
+## Status (19 Oct 2026)
+
+The reviewer-round experiments (local LLM, real prices, baselines, aware attackers, price impact) are running; their sections are added to `main.tex` as results arrive. The AAAI-27 workshop version will be built in `paper/aaai/` from the same generated tables and figures.
+
+## Results already in the paper (100 seeds, leak-free re-run)
 
 All results come from 100 paired seeds, re-run after the text-lookahead and hash-order fixes. Every claim in the prose is a paired comparison listed in `scripts/make_report_tables.py` and reported in the appendix tables. The placebo ladder, the grounding gain (in both attack settings) and the hold-on-conflict penalty are detectable. Microstructure proxies, the risk layer's drawdown benefit and most κ steps are not, and the text says "no detectable difference" for them.
 
