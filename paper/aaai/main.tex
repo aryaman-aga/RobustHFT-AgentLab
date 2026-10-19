@@ -1,0 +1,66 @@
+% =============================================================================
+%  AAAI-27 build: anonymous submission to the FinFM workshop (AAAI-27 author kit, aaai2027.sty/.bst).
+%  Shares ../preamble.tex (macros) and ../sections/*.tex (all prose) with the IEEE build (../main.tex).
+%  The submitted PDF must be compiled with pdfLaTeX, which aaai2027.sty requires (e.g. Overleaf, or
+%  `make paper-aaai-zip` and upload the zip). Local drafts: `make paper-aaai` compiles draft.tex with
+%  tectonic (XeTeX), which only skips the style's engine check; this file stays exactly as submitted.
+% =============================================================================
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage[submission]{aaai2027}  % DO NOT CHANGE THIS
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\frenchspacing  % DO NOT CHANGE THIS
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+\setcounter{secnumdepth}{2} % numbered sections, so the text can refer to them
+
+% ---- shared sources live one directory up (a flat copy also works: files in . are found first) ----
+\makeatletter
+\def\input@path{{../}}
+\makeatother
+\graphicspath{{../}}
+\newif\ifanonymous
+\anonymoustrue
+\input{preamble.tex}
+\rhalcapbelowtrue % AAAI: table captions go under the table
+
+\title{RobustHFT-AgentLab: A Defense Layer Against Misinformation Attacks on LLM-Based Trading Agents}
+\author{Anonymous Submission}
+\affiliations{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\input{sections/abstract.tex}
+\end{abstract}
+
+\input{sections/introduction.tex}
+\input{sections/related.tex}
+\input{sections/threat.tex}
+\input{sections/defense.tex}
+\input{sections/protocol.tex}
+\input{sections/setup.tex}
+\input{sections/results.tex}
+\input{sections/discussion.tex}
+\input{sections/conclusion.tex}
+
+\section*{Reproducibility}
+\input{sections/reproducibility.tex}
+
+\section*{Ethical Statement}
+\input{sections/ethics.tex}
+
+\bibliography{references}
+
+% ---- technical appendix (FinFM: references and appendices do not count toward the 7 pages) ----
+\appendix
+\input{sections/appendix.tex}
+
+\end{document}

@@ -3,7 +3,7 @@ PY := .venv/bin/python
 PIP := $(PY) -m pip
 
 .PHONY: venv install install-optional data test test-fast format lint pipeline ablation price-impact report frontend train-detector \
-        paper clean all llm-setup llm-up llm-down llm-pull real-data
+        paper paper-aaai paper-aaai-zip clean all llm-setup llm-up llm-down llm-pull real-data
 
 venv:
 	python3 -m venv .venv
@@ -65,6 +65,24 @@ frontend:
 paper:
 	cd paper && if command -v tectonic >/dev/null 2>&1; then tectonic main.tex; \
 	else pdflatex -interaction=nonstopmode main.tex && bibtex main && pdflatex -interaction=nonstopmode main.tex && pdflatex -interaction=nonstopmode main.tex; fi
+
+# AAAI-27 (FinFM workshop) build: anonymous; shares paper/preamble.tex and paper/sections/ with the IEEE build.
+# aaai2027.sty only accepts pdfLaTeX. Without it, `paper-aaai` writes a tectonic draft (paper/aaai/draft.pdf)
+# that skips just that engine check. For the submitted PDF, run `paper-aaai-zip`, upload the zip to Overleaf
+# and compile main.tex with pdfLaTeX.
+paper-aaai:
+	cd paper/aaai && if command -v pdflatex >/dev/null 2>&1; then \
+	pdflatex -interaction=nonstopmode main.tex && bibtex main && pdflatex -interaction=nonstopmode main.tex && pdflatex -interaction=nonstopmode main.tex; \
+	else tectonic draft.tex; fi
+
+paper-aaai-zip:
+	rm -rf paper/aaai/build && mkdir -p paper/aaai/build/src
+	cp paper/aaai/main.tex paper/aaai/aaai2027.sty paper/aaai/aaai2027.bst paper/preamble.tex paper/references.bib paper/aaai/build/src/
+	cp -R paper/sections paper/tables paper/figures paper/aaai/build/src/
+	rm -f paper/aaai/aaai27_source.zip
+	cd paper/aaai/build/src && zip -qr ../../aaai27_source.zip .
+	$(PY) scripts/export_openreview.py
+	@echo "wrote paper/aaai/aaai27_source.zip: upload it to Overleaf and compile main.tex with pdfLaTeX"
 
 # --- Local LLM (Ollama), installed INSIDE .venv: binary, models and state all live under .venv/ollama ---
 # make llm-setup  -> pinned Ollama build, checksum-verified (scripts/setup_ollama.sh)

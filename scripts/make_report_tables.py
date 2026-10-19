@@ -48,6 +48,13 @@ FIT_BEGIN, FIT_END = "\\begin{adjustbox}{max width=\\linewidth}", "\\end{adjustb
 WIDE_COLS = 6  # arm tables with this many metric columns become two-column table*
 
 
+def float_table(env: str, caption: str, label: str, body: list[str]) -> str:
+    r"""A table float for paper/. ``\rhaltable`` (paper/preamble.tex) sets the caption above the body in the IEEE
+    build and below it in the AAAI build, whose style requires table captions under the table."""
+    head = [f"\\begin{{{env}}}[t]", "\\centering", f"\\rhaltable{{\\caption{{{caption}}}\\label{{{label}}}}}{{%"]
+    return "\n".join(head + body + ["}", f"\\end{{{env}}}"])
+
+
 # ---------------------------------------------------------------------------
 # Paired comparisons (mean over seeds of metric(A) - metric(B)). Holm is applied per family.
 # Sign convention for defence/component rows: positive = the thing named second lowers the metric.
@@ -345,13 +352,12 @@ def decomposition_tables(full: pd.DataFrame, st: pd.DataFrame) -> tuple[str, str
         "| defence | placebo | count-matched | + bias | frozen attack | meaning (95% CI) |",
         "|---|---|---|---|---|---|",
     ]
-    tex = [
-        "\\begin{table}[t]",
-        "\\centering",
-        "\\caption{ASR (\\%) of the controls built from the frozen attack tape, mean over seeds. Each column adds one ingredient of the attack: "
+    caption = (
+        "ASR (\\%) of the controls built from the frozen attack tape, mean over seeds. Each column adds one ingredient of the attack: "
         "paraphrases of every item (classic placebo), paraphrases of only the attacked items, plus the attack's bias contexts, and finally the "
-        "misinformation itself. Meaning $=$ frozen $-$ (count-matched $+$ bias), with its 95\\% bootstrap CI.}",
-        "\\label{tab:decomposition}",
+        "misinformation itself. Meaning $=$ frozen $-$ (count-matched $+$ bias), with its 95\\% bootstrap CI."
+    )
+    tex = [
         "\\small",
         FIT_BEGIN,
         "\\begin{tabular}{lrrrrr}",
@@ -368,8 +374,8 @@ def decomposition_tables(full: pd.DataFrame, st: pd.DataFrame) -> tuple[str, str
         ci = f"{100 * r['mean_diff']:+.1f} [{100 * r['ci_lo']:+.1f}, {100 * r['ci_hi']:+.1f}]"
         md.append(f"| {d} | " + " | ".join(f"{x:.1f}" for x in v) + f" | {ci} |")
         tex.append(d.replace("_", "\\_") + " & " + " & ".join(f"{x:.1f}" for x in v) + f" & {ci} \\\\")
-    tex += ["\\bottomrule", "\\end{tabular}", FIT_END, "\\end{table}"]
-    return "\n".join(md), "\n".join(tex)
+    tex += ["\\bottomrule", "\\end{tabular}", FIT_END]
+    return "\n".join(md), float_table("table", caption, "tab:decomposition", tex)
 
 
 def ablation_comparisons(group: str) -> list[Comparison]:
@@ -627,14 +633,13 @@ def baseline_table(agg: pd.DataFrame) -> str:
         return "--" if pd.isna(v) else f"{100 * v:.1f}".replace("-", "$-$")
 
     n = int(a["n_seeds"].max())
-    lines = [
-        "\\begin{table}[t]",
-        "\\centering",
-        f"\\caption{{Grounding and standard defenses (mean over {n} seeds, \\%): ASR and net ASR under the adaptive "
+    caption = (
+        f"Grounding and standard defenses (mean over {n} seeds, \\%): ASR and net ASR under the adaptive "
         "attack, net ASR under its frozen replay, clean-market return (CR) over the evaluation window, and the shares "
         "of injected and of clean retrieved documents that the detection filter drops. The attacker screens its "
-        "candidates with the same detector at a 10\\% false-positive rate.}",
-        "\\label{tab:baselines}",
+        "candidates with the same detector at a 10\\% false-positive rate."
+    )
+    lines = [
         "\\footnotesize",
         FIT_BEGIN,
         "\\begin{tabular}{lrrrrrr}",
@@ -656,8 +661,8 @@ def baseline_table(agg: pd.DataFrame) -> str:
             cell(f"clean__{v}", "filter_clean_drop"),
         ]
         lines.append(f"{label} & " + " & ".join(cells) + " \\\\")
-    lines += ["\\bottomrule", "\\end{tabular}", FIT_END, "\\end{table}"]
-    return "\n".join(lines)
+    lines += ["\\bottomrule", "\\end{tabular}", FIT_END]
+    return float_table("table", caption, "tab:baselines", lines)
 
 
 def _fmt_p(p: float) -> str:
@@ -715,10 +720,6 @@ def _tex_signed(x: float) -> str:
 
 def stats_latex(st: pd.DataFrame, caption: str, label: str) -> str:
     lines = [
-        "\\begin{table}[t]",
-        "\\centering",
-        f"\\caption{{{caption}}}",
-        f"\\label{{{label}}}",
         "\\footnotesize",
         FIT_BEGIN,
         "\\begin{tabular}{lrrr}",
@@ -730,14 +731,14 @@ def stats_latex(st: pd.DataFrame, caption: str, label: str) -> str:
         for _, r in block.iterrows():
             p = _fmt_p(r["p_holm"]).replace("<", "$<$")
             p = f"\\textbf{{{p}}}" if r["significant"] else p
-            label = pretty_label(r["label"]).replace(
+            name = pretty_label(r["label"]).replace(
                 "_", "\\_"
             )  # (no backslashes inside f-string braces before Python 3.12)
             lines.append(
-                f"{label} & {_tex_signed(100 * r['mean_diff'])} & [{_tex_signed(100 * r['ci_lo'])}, {_tex_signed(100 * r['ci_hi'])}] & {p} \\\\"
+                f"{name} & {_tex_signed(100 * r['mean_diff'])} & [{_tex_signed(100 * r['ci_lo'])}, {_tex_signed(100 * r['ci_hi'])}] & {p} \\\\"
             )
-    lines += ["\\bottomrule", "\\end{tabular}", FIT_END, "\\end{table}"]
-    return "\n".join(lines)
+    lines += ["\\bottomrule", "\\end{tabular}", FIT_END]
+    return float_table("table", caption, label, lines)
 
 
 def latex_table(agg: pd.DataFrame, cols: list[str], caption: str, label: str, arm_map=None) -> str:
@@ -745,10 +746,6 @@ def latex_table(agg: pd.DataFrame, cols: list[str], caption: str, label: str, ar
     head = " & ".join(["Arm"] + [c.replace("_", "\\_") for c in cols]) + " \\\\"
     env = "table*" if len(cols) >= WIDE_COLS else "table"  # wide tables span both IEEE columns
     lines = [
-        f"\\begin{{{env}}}[t]",
-        "\\centering",
-        f"\\caption{{{caption}}}",
-        f"\\label{{{label}}}",
         "\\small",
         FIT_BEGIN,
         "\\begin{tabular}{l" + "r" * len(cols) + "}",
@@ -768,8 +765,8 @@ def latex_table(agg: pd.DataFrame, cols: list[str], caption: str, label: str, ar
                 cells.append(f"{m:.2f}$\\pm${s:.2f}")
         name = (arm_map(r["arm"]) if arm_map else r["arm"]).replace("_", "\\_")
         lines.append(f"{name} & " + " & ".join(cells) + " \\\\")
-    lines += ["\\bottomrule", "\\end{tabular}", FIT_END, f"\\end{{{env}}}"]
-    return "\n".join(lines)
+    lines += ["\\bottomrule", "\\end{tabular}", FIT_END]
+    return float_table(env, caption, label, lines)
 
 
 def md_table(agg: pd.DataFrame, cols: list[str]) -> str:
@@ -1104,12 +1101,13 @@ def main() -> None:
                     md.append(f"| {k} | {v['minor']:.2f} | {v['news_style']:.2f} | {v['academic_style']:.2f} |")
             md.append("")
             rows = [(k, v) for k, v in m["per_type_detection_rate"].items() if isinstance(v, dict)]
+            caption = (
+                "Detection rate of the proxy detector by edit type, for the minor edit alone and after each style rewrite "
+                f"(threshold set at {100 * m['target_fpr']:.0f}\\% false positives on clean text)."
+            )
             tex = [
-                "\\begin{table}[t]",
-                "\\centering",
-                f"\\caption{{Detection rate of the proxy detector by edit type, for the minor edit alone and after each style rewrite (threshold set at {100 * m['target_fpr']:.0f}\\% false positives on clean text).}}",
-                "\\label{tab:detector}",
                 "\\footnotesize",
+                FIT_BEGIN,
                 "\\begin{tabular}{lrrr}",
                 "\\toprule",
                 "Edit type & Minor edit & + news rewrite & + academic rewrite \\\\",
@@ -1119,8 +1117,8 @@ def main() -> None:
                 f"{EDIT_TYPE_NAMES.get(k, k.replace('_', ' '))} & {v['minor']:.2f} & {v['news_style']:.2f} & {v['academic_style']:.2f} \\\\"
                 for k, v in rows
             ]
-            tex += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
-            (tex_dir / "detector.tex").write_text("\n".join(tex))
+            tex += ["\\bottomrule", "\\end{tabular}", FIT_END]
+            (tex_dir / "detector.tex").write_text(float_table("table", caption, "tab:detector", tex))
 
     imp_csv = root / "price_impact" / "price_impact_runs.csv"
     imp_meta = root / "price_impact" / "impact_meta.json"

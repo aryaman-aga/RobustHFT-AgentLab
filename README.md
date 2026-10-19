@@ -103,7 +103,8 @@ make pipeline           # 18 arms x 100 seeds (~20 min) -> outputs/pipeline/
 make ablation           # every ablation group (~4-5 h)  -> outputs/ablation/<group>/
 make price-impact       # fake news that also moves prices (~1 h) -> outputs/price_impact/
 make report             # outputs/report.md, paper/tables/*.tex, paper/figures/*.pdf
-make paper              # paper/main.pdf (tectonic, or pdflatex + bibtex)
+make paper              # paper/main.pdf, IEEE build with author names (tectonic, or pdflatex + bibtex)
+make paper-aaai         # AAAI-27 submission build (anonymous); paper-aaai-zip makes the Overleaf zip
 ```
 
 `make all` runs the whole chain. Every target uses `.venv/bin/python`. Quick runs: `--seeds 2` on any script, or `--seeds 30` for a fast but meaningful run. Without `make`:

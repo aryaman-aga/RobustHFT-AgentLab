@@ -30,6 +30,7 @@ from make_report_tables import (  # noqa: E402
     REPLICATIONS,
     ablation_comparisons,
     control_comparisons,
+    float_table,
     impact_comparisons,
     main_comparisons,
     replication_comparisons,
@@ -398,13 +399,12 @@ def tab_main(summ: pd.DataFrame, st: pd.DataFrame) -> None:
         return f"{tex_num(m)} [{tex_num(lo)}, {tex_num(hi)}]"
 
     rows = [("No defense", "none"), ("Grounding", "grounded"), ("Grounding + risk", "grounded_risk")]
-    lines = [
-        r"\begin{table*}[t]",
-        r"\centering",
-        r"\caption{Main results over \val{NseedsRun} paired seeds (\%). Net ASR $=$ ASR $-$ ASR of the paraphrase placebo, with 95\% bootstrap CIs. "
+    caption = (
+        r"Main results over \val{NseedsRun} paired seeds (\%). Net ASR $=$ ASR $-$ ASR of the paraphrase placebo, with 95\% bootstrap CIs. "
         r"\emph{Adaptive}: MisGen's feedback loop runs against the defended agent. \emph{Frozen}: the attack recorded against the undefended agent is replayed verbatim. "
-        r"Clean return is the paired clean agent's cumulative return over the 60-day window; drawdown is the attacked agent's maximum drawdown.}",
-        r"\label{tab:main}",
+        r"Clean return is the paired clean agent's cumulative return over the 60-day window; drawdown is the attacked agent's maximum drawdown."
+    )
+    lines = [
         r"\small",
         r"\setlength{\tabcolsep}{4.5pt}",
         r"\begin{tabular}{@{}lrrrrrrr@{}}",
@@ -420,9 +420,9 @@ def tab_main(summ: pd.DataFrame, st: pd.DataFrame) -> None:
             f"{100 * summ.loc[f'placebo__{d}', 'ASR_mean']:.1f} & {ci(f'net_{d}')} & {frozen} & "
             f"{tex_num(100 * summ.loc[f'clean__{d}', 'CR_mean'], plus=True)} & {tex_num(100 * summ.loc[f'injected__{d}', 'max_drawdown_mean'])} \\\\"
         )
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
+    lines += [r"\bottomrule", r"\end{tabular}"]
     out = ROOT / "paper" / "tables" / "tab_main.tex"
-    out.write_text("\n".join(lines) + "\n")
+    out.write_text(float_table("table*", caption, "tab:main", lines) + "\n")
     print(f"wrote {out.relative_to(ROOT)}")
 
 

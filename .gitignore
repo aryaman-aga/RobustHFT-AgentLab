@@ -31,6 +31,9 @@ data/real/
 *.synctex.gz
 *.toc
 paper/*.pdf
+paper/aaai/*.pdf
+paper/aaai/build/
+paper/aaai/*.zip
 
 # --- Editors / OS ------------------------------------------------------------
 .DS_Store

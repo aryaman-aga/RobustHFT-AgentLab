@@ -1,0 +1,5 @@
+% Local draft of the AAAI-27 build with tectonic (XeTeX). aaai2027.sty stops on any engine but pdfLaTeX;
+% this wrapper skips only that check and then reads main.tex unchanged. Submit a pdfLaTeX build of main.tex.
+\RequirePackage{iftex}
+\ifPDFTeX\else\let\RequirePDFTeX\relax\fi
+\input{main.tex}
