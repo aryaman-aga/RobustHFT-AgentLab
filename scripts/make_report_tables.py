@@ -491,6 +491,18 @@ def ablation_comparisons(group: str) -> list[Comparison]:
                                 f"{pre}__{b}",
                             )
                         )
+            # how much stronger the conflict-seeking attacker is under each rule (positive = stronger)
+            for rule in ("hold", "shrink", "nohold"):
+                out.append(
+                    C(
+                        f"conf_{setting}_attacker_{rule}",
+                        f"Conflict-seeking vs standard attacker, {setting} (net ASR)",
+                        f"{rule}_conflict $-$ {rule}",
+                        "ASR_net",
+                        f"{pre}__{rule}_conflict",
+                        f"{pre}__{rule}",
+                    )
+                )
     elif group == "retrieval":  # is net ASR an artefact of top-k? (expect no difference)
         for k in ("k2", "k8"):
             out.append(

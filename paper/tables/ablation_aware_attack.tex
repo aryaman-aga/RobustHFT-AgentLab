@@ -1,0 +1,42 @@
+\begin{table}[t]
+\centering
+\caption{Ablation (aware attack), mean$\pm$std over seeds.}
+\label{tab:abl_aware_attack}
+\small
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lrrrr}
+\toprule
+Arm & MER & ASR & ASR\_net & CR\_clean\_paired \\
+\midrule
+clean\_\_full & 0.0$\pm$0.0 & 0.0$\pm$0.0 & -- & 2.2$\pm$8.7 \\
+clean\_\_full\_aligned & 0.0$\pm$0.0 & 0.0$\pm$0.0 & -- & 2.2$\pm$8.7 \\
+clean\_\_full\_conflict & 0.0$\pm$0.0 & 0.0$\pm$0.0 & -- & 2.2$\pm$8.7 \\
+clean\_\_grounding & 0.0$\pm$0.0 & 0.0$\pm$0.0 & -- & 2.9$\pm$10.2 \\
+clean\_\_grounding\_aligned & 0.0$\pm$0.0 & 0.0$\pm$0.0 & -- & 2.9$\pm$10.2 \\
+clean\_\_none & 0.0$\pm$0.0 & 0.0$\pm$0.0 & -- & 6.6$\pm$10.0 \\
+clean\_\_none\_aligned & 0.0$\pm$0.0 & 0.0$\pm$0.0 & -- & 6.6$\pm$10.0 \\
+frozen\_\_full & 59.8$\pm$4.0 & 26.5$\pm$6.9 & 9.0$\pm$7.2 & 2.2$\pm$8.7 \\
+frozen\_\_full\_aligned & 59.1$\pm$3.3 & 28.0$\pm$6.3 & 10.5$\pm$6.9 & 2.2$\pm$8.7 \\
+frozen\_\_full\_conflict & 60.5$\pm$3.5 & 32.8$\pm$8.6 & 15.4$\pm$8.7 & 2.2$\pm$8.7 \\
+frozen\_\_grounding & 59.8$\pm$4.0 & 22.6$\pm$7.2 & 8.3$\pm$6.7 & 2.9$\pm$10.2 \\
+frozen\_\_grounding\_aligned & 59.1$\pm$3.3 & 23.1$\pm$6.8 & 8.9$\pm$6.5 & 2.9$\pm$10.2 \\
+frozen\_\_none & 62.1$\pm$4.3 & 39.3$\pm$8.0 & 18.4$\pm$8.9 & 6.6$\pm$10.0 \\
+frozen\_\_none\_aligned & 61.4$\pm$3.4 & 40.0$\pm$8.8 & 19.0$\pm$9.9 & 6.6$\pm$10.0 \\
+injected\_\_full & 59.5$\pm$3.2 & 26.8$\pm$7.1 & 9.3$\pm$8.0 & 2.2$\pm$8.7 \\
+injected\_\_full\_aligned & 58.8$\pm$3.3 & 27.3$\pm$6.9 & 9.8$\pm$8.0 & 2.2$\pm$8.7 \\
+injected\_\_full\_conflict & 60.1$\pm$3.1 & 32.4$\pm$7.8 & 14.9$\pm$9.0 & 2.2$\pm$8.7 \\
+injected\_\_grounding & 59.5$\pm$3.3 & 21.6$\pm$6.9 & 7.4$\pm$6.1 & 2.9$\pm$10.2 \\
+injected\_\_grounding\_aligned & 58.6$\pm$3.1 & 22.1$\pm$6.8 & 7.9$\pm$7.1 & 2.9$\pm$10.2 \\
+injected\_\_none & 62.1$\pm$4.3 & 39.3$\pm$8.0 & 18.4$\pm$8.9 & 6.6$\pm$10.0 \\
+injected\_\_none\_aligned & 61.4$\pm$3.4 & 40.0$\pm$8.8 & 19.0$\pm$9.9 & 6.6$\pm$10.0 \\
+placebo\_\_full & 50.8$\pm$0.9 & 17.5$\pm$4.6 & -- & 2.2$\pm$8.7 \\
+placebo\_\_full\_aligned & 50.8$\pm$0.9 & 17.5$\pm$4.6 & -- & 2.2$\pm$8.7 \\
+placebo\_\_full\_conflict & 50.8$\pm$0.9 & 17.5$\pm$4.6 & -- & 2.2$\pm$8.7 \\
+placebo\_\_grounding & 50.8$\pm$0.9 & 14.2$\pm$4.8 & -- & 2.9$\pm$10.2 \\
+placebo\_\_grounding\_aligned & 50.8$\pm$0.9 & 14.2$\pm$4.8 & -- & 2.9$\pm$10.2 \\
+placebo\_\_none & 50.8$\pm$1.2 & 20.9$\pm$5.3 & -- & 6.6$\pm$10.0 \\
+placebo\_\_none\_aligned & 50.8$\pm$1.2 & 20.9$\pm$5.3 & -- & 6.6$\pm$10.0 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}

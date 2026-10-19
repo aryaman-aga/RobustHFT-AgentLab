@@ -1,0 +1,38 @@
+\begin{table}[t]
+\centering
+\caption{Ablation (conflict handling), mean$\pm$std over seeds.}
+\label{tab:abl_conflict_handling}
+\small
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lrrrrr}
+\toprule
+Arm & ASR & ASR\_net & position\_gap & CR\_clean\_paired & hold\_rate \\
+\midrule
+clean\_\_hold & 0.0$\pm$0.0 & -- & 0.0$\pm$0.0 & 2.2$\pm$8.7 & 34.7$\pm$7.9 \\
+clean\_\_hold\_conflict & 0.0$\pm$0.0 & -- & 0.0$\pm$0.0 & 2.2$\pm$8.7 & 34.7$\pm$7.9 \\
+clean\_\_nohold & 0.0$\pm$0.0 & -- & 0.0$\pm$0.0 & 2.3$\pm$8.7 & 27.1$\pm$7.8 \\
+clean\_\_nohold\_conflict & 0.0$\pm$0.0 & -- & 0.0$\pm$0.0 & 2.3$\pm$8.7 & 27.1$\pm$7.8 \\
+clean\_\_shrink & 0.0$\pm$0.0 & -- & 0.0$\pm$0.0 & 2.2$\pm$8.7 & 27.1$\pm$7.8 \\
+clean\_\_shrink\_conflict & 0.0$\pm$0.0 & -- & 0.0$\pm$0.0 & 2.2$\pm$8.7 & 27.1$\pm$7.8 \\
+frozen\_\_hold & 26.5$\pm$6.9 & 9.0$\pm$7.2 & 11.8$\pm$6.1 & 2.2$\pm$8.7 & 34.8$\pm$6.9 \\
+frozen\_\_hold\_conflict & 32.8$\pm$8.6 & 15.4$\pm$8.7 & 17.4$\pm$8.6 & 2.2$\pm$8.7 & 36.9$\pm$9.1 \\
+frozen\_\_nohold & 22.8$\pm$7.1 & 8.4$\pm$6.7 & 10.7$\pm$5.2 & 2.3$\pm$8.7 & 24.0$\pm$6.9 \\
+frozen\_\_nohold\_conflict & 27.9$\pm$8.2 & 13.5$\pm$8.0 & 16.2$\pm$8.1 & 2.3$\pm$8.7 & 25.1$\pm$7.2 \\
+frozen\_\_shrink & 22.8$\pm$7.1 & 8.4$\pm$6.7 & 11.1$\pm$5.3 & 2.2$\pm$8.7 & 24.0$\pm$6.9 \\
+frozen\_\_shrink\_conflict & 28.0$\pm$8.1 & 13.6$\pm$8.0 & 16.7$\pm$8.1 & 2.2$\pm$8.7 & 25.1$\pm$7.2 \\
+injected\_\_hold & 26.8$\pm$7.1 & 9.3$\pm$8.0 & 11.7$\pm$6.0 & 2.2$\pm$8.7 & 34.1$\pm$7.1 \\
+injected\_\_hold\_conflict & 32.4$\pm$7.8 & 14.9$\pm$9.0 & 16.8$\pm$8.9 & 2.2$\pm$8.7 & 35.1$\pm$8.2 \\
+injected\_\_nohold & 21.7$\pm$6.9 & 7.4$\pm$6.3 & 10.5$\pm$5.7 & 2.3$\pm$8.7 & 24.1$\pm$7.6 \\
+injected\_\_nohold\_conflict & 27.7$\pm$8.3 & 13.4$\pm$8.9 & 16.2$\pm$8.7 & 2.3$\pm$8.7 & 24.6$\pm$7.5 \\
+injected\_\_shrink & 21.9$\pm$6.9 & 7.5$\pm$6.3 & 10.7$\pm$5.5 & 2.2$\pm$8.7 & 24.2$\pm$7.6 \\
+injected\_\_shrink\_conflict & 27.7$\pm$8.3 & 13.4$\pm$8.8 & 16.4$\pm$8.8 & 2.2$\pm$8.7 & 24.6$\pm$7.6 \\
+placebo\_\_hold & 17.5$\pm$4.6 & -- & 8.4$\pm$5.7 & 2.2$\pm$8.7 & 37.4$\pm$7.4 \\
+placebo\_\_hold\_conflict & 17.5$\pm$4.6 & -- & 8.4$\pm$5.7 & 2.2$\pm$8.7 & 37.4$\pm$7.4 \\
+placebo\_\_nohold & 14.4$\pm$4.8 & -- & 7.4$\pm$4.6 & 2.3$\pm$8.7 & 25.4$\pm$6.8 \\
+placebo\_\_nohold\_conflict & 14.4$\pm$4.8 & -- & 7.4$\pm$4.6 & 2.3$\pm$8.7 & 25.4$\pm$6.8 \\
+placebo\_\_shrink & 14.4$\pm$4.8 & -- & 7.6$\pm$4.3 & 2.2$\pm$8.7 & 25.4$\pm$6.8 \\
+placebo\_\_shrink\_conflict & 14.4$\pm$4.8 & -- & 7.6$\pm$4.3 & 2.2$\pm$8.7 & 25.4$\pm$6.8 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}

@@ -1,0 +1,51 @@
+\begin{table}[t]
+\centering
+\caption{Paired comparisons over seeds for the replications with a local LLM and on real BTC-USD prices; conventions as in Table~\ref{tab:stats_main}.}
+\label{tab:stats_replications}
+\footnotesize
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lrrr}
+\toprule
+Comparison & $\Delta$ (pp) & 95\% CI & $p_{\mathrm{Holm}}$ \\
+\midrule
+\multicolumn{4}{l}{\textit{LLM reader: misinformation effect and defense gain}} \\
+net ASR, adaptive, no defense & +14.6 & [+11.8, +17.4] & \textbf{$<$0.001} \\
+net ASR, adaptive, grounding & +7.4 & [+5.3, +9.7] & \textbf{$<$0.001} \\
+net ASR, adaptive, grounding + risk & +9.5 & [+7.4, +11.8] & \textbf{$<$0.001} \\
+net ASR (adaptive): no defense $-$ grounding & +7.2 & [+3.8, +10.7] & \textbf{$<$0.001} \\
+net ASR (adaptive): no defense $-$ grounding + risk & +5.1 & [+1.8, +8.0] & \textbf{0.013} \\
+net ASR (adaptive): grounding $-$ grounding + risk & $-$2.1 & [$-$4.5, +0.2] & 0.223 \\
+net ASR (frozen): no defense $-$ grounding & +6.1 & [+3.2, +9.2] & \textbf{0.001} \\
+net ASR (frozen): no defense $-$ grounding + risk & +5.9 & [+3.3, +8.6] & \textbf{$<$0.001} \\
+net ASR (frozen): grounding $-$ grounding + risk & $-$0.2 & [$-$2.0, +1.7] & 0.907 \\
+placebo ASR: no defense $-$ grounding & +8.7 & [+6.4, +11.1] & \textbf{$<$0.001} \\
+clean CR: no defense $-$ grounding & +5.0 & [+2.9, +7.2] & \textbf{$<$0.001} \\
+\midrule
+\multicolumn{4}{l}{\textit{LLM reader: ASR decomposition on the frozen tape}} \\
+bias: bias-matched $-$ matched, no defense & +2.9 & [+1.7, +4.2] & \textbf{$<$0.001} \\
+content: attack $-$ bias-matched, no defense & +11.3 & [+8.4, +14.5] & \textbf{$<$0.001} \\
+bias: bias-matched $-$ matched, grounding & +2.7 & [+1.7, +3.7] & \textbf{$<$0.001} \\
+content: attack $-$ bias-matched, grounding & +5.7 & [+3.5, +7.8] & \textbf{$<$0.001} \\
+\midrule
+\multicolumn{4}{l}{\textit{BTC-USD prices: misinformation effect and defense gain}} \\
+net ASR, adaptive, no defense & +16.1 & [+14.3, +17.9] & \textbf{$<$0.001} \\
+net ASR, adaptive, grounding & +7.8 & [+6.5, +9.2] & \textbf{$<$0.001} \\
+net ASR, adaptive, grounding + risk & +9.1 & [+7.4, +10.9] & \textbf{$<$0.001} \\
+net ASR (adaptive): no defense $-$ grounding & +8.3 & [+6.2, +10.2] & \textbf{$<$0.001} \\
+net ASR (adaptive): no defense $-$ grounding + risk & +7.0 & [+4.9, +9.0] & \textbf{$<$0.001} \\
+net ASR (adaptive): grounding $-$ grounding + risk & $-$1.3 & [$-$2.8, +0.1] & 0.204 \\
+net ASR (frozen): no defense $-$ grounding & +8.8 & [+6.8, +10.8] & \textbf{$<$0.001} \\
+net ASR (frozen): no defense $-$ grounding + risk & +8.0 & [+5.9, +10.0] & \textbf{$<$0.001} \\
+net ASR (frozen): grounding $-$ grounding + risk & $-$0.8 & [$-$1.9, +0.2] & 0.204 \\
+placebo ASR: no defense $-$ grounding & +8.1 & [+6.4, +9.8] & \textbf{$<$0.001} \\
+clean CR: no defense $-$ grounding & +6.6 & [+2.8, +10.5] & \textbf{0.003} \\
+\midrule
+\multicolumn{4}{l}{\textit{BTC-USD prices: ASR decomposition on the frozen tape}} \\
+bias: bias-matched $-$ matched, no defense & +3.8 & [+2.6, +5.0] & \textbf{$<$0.001} \\
+content: attack $-$ bias-matched, no defense & +12.3 & [+10.2, +14.2] & \textbf{$<$0.001} \\
+bias: bias-matched $-$ matched, grounding & +2.3 & [+1.5, +3.1] & \textbf{$<$0.001} \\
+content: attack $-$ bias-matched, grounding & +5.0 & [+3.4, +6.6] & \textbf{$<$0.001} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
