@@ -3,7 +3,7 @@ PY := .venv/bin/python
 PIP := $(PY) -m pip
 
 .PHONY: venv install install-optional data test test-fast format lint pipeline ablation price-impact report frontend train-detector \
-        paper paper-aaai paper-aaai-zip clean all llm-setup llm-up llm-down llm-pull real-data
+        paper paper-aaai paper-aaai-zip supplementary clean all llm-setup llm-up llm-down llm-pull real-data
 
 venv:
 	python3 -m venv .venv
@@ -83,6 +83,10 @@ paper-aaai-zip:
 	cd paper/aaai/build/src && zip -qr ../../aaai27_source.zip .
 	$(PY) scripts/export_openreview.py
 	@echo "wrote paper/aaai/aaai27_source.zip: upload it to Overleaf and compile main.tex with pdfLaTeX"
+
+# Anonymized code for double-blind review (tracked code only, identifying lines removed and re-checked)
+supplementary:
+	$(PY) scripts/make_supplement.py
 
 # --- Local LLM (Ollama), installed INSIDE .venv: binary, models and state all live under .venv/ollama ---
 # make llm-setup  -> pinned Ollama build, checksum-verified (scripts/setup_ollama.sh)

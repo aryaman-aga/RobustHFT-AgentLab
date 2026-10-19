@@ -42,7 +42,7 @@ Refresh everything after new experiments: `make pipeline ablation price-impact r
 
 - The AAAI build is anonymous: the style's `submission` option prints "Anonymous submission", and `\anonymoustrue` replaces the repository URL with "provided as supplementary material". The draft's text and PDF metadata contain no names, affiliation, e-mail or URL (checked 20 Oct 2026). Check this again on the Overleaf PDF before submitting.
 - The IEEE build prints the authors (`\anonymousfalse`); the e-mail line still reads "TBD".
-- The repository is private and its docs, git history and BTP reports name the authors. Any code given to reviewers must be an anonymized copy.
+- The repository is private and its git history and BTP reports name the authors. Give reviewers `make supplementary` instead: `aaai/aaai27_supplementary.zip` holds the tracked code, configs, tests, docs and frontend with the identifying README lines removed, and the script refuses to write the zip if any author name, affiliation or repository owner is left.
 
 ## Results in the paper
 
