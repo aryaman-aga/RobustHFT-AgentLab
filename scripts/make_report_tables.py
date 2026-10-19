@@ -18,7 +18,7 @@ import pandas as pd
 from _common import ROOT, base_parser, parse_overrides
 
 from rhal.config import load_config
-from rhal.evaluation.stats import Comparison, compare
+from rhal.evaluation.stats import Comparison, compare, paired_diffs
 from rhal.utils.io import ensure_dir, save_csv
 
 PCT = {
@@ -455,26 +455,43 @@ def ablation_comparisons(group: str) -> list[Comparison]:
                 C(f"base_cost_{v}", "Baseline defenses (clean CR)", f"none $-$ {v}", "CR", "clean__none", f"clean__{v}")
             )
     elif group == "aware_attack":  # a - b; for "x_aligned - x" a positive value means the aware attacker is stronger
-        pairs = [
-            ("gain_std", "none", "grounding"),
-            ("gain_aligned", "none_aligned", "grounding_aligned"),
-            ("aligned_vs_std_none", "none_aligned", "none"),
-            ("aligned_vs_std_grounding", "grounding_aligned", "grounding"),
-            ("aligned_vs_std_full", "full_aligned", "full"),
-            ("conflict_vs_std_full", "full_conflict", "full"),
-        ]
         for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
-            for key, a, b in pairs:
+            fam = f"Grounding's gain against each attacker, {setting} (net ASR)"
+            for kind, sfx in (("std", ""), ("aligned", "_aligned"), ("conflict", "_conflict")):
                 out.append(
                     C(
-                        f"aware_{setting}_{key}",
-                        f"Defense-aware attacker, {setting} (net ASR)",
-                        f"{a} $-$ {b}",
+                        f"aware_{setting}_gain_{kind}",
+                        fam,
+                        f"none{sfx} $-$ grounding{sfx}",
                         "ASR_net",
-                        f"{pre}__{a}",
-                        f"{pre}__{b}",
+                        f"{pre}__none{sfx}",
+                        f"{pre}__grounding{sfx}",
                     )
                 )
+            for kind in ("aligned", "conflict"):  # positive = the aware attacker shrinks grounding's gain
+                out.append(
+                    C(
+                        f"aware_{setting}_gain_drop_{kind}",
+                        fam,
+                        f"gain: standard $-$ {kind} attacker",
+                        "gain_net",
+                        f"gain@{setting}_std",
+                        f"gain@{setting}_{kind}",
+                    )
+                )
+            fam = f"Defense-aware vs standard attacker, {setting} (net ASR)"
+            for kind in ("aligned", "conflict"):
+                for d in ("none", "grounding", "full"):
+                    out.append(
+                        C(
+                            f"aware_{setting}_{kind}_vs_std_{d}",
+                            fam,
+                            f"{d}_{kind} $-$ {d}",
+                            "ASR_net",
+                            f"{pre}__{d}_{kind}",
+                            f"{pre}__{d}",
+                        )
+                    )
     elif group == "conflict_handling":  # a - b: positive = the second-named rule leaves the lower value
         for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
             for atk in ("", "_conflict"):
@@ -526,6 +543,75 @@ def ablation_comparisons(group: str) -> list[Comparison]:
                 )
             )
     return out
+
+
+def with_gain_rows(group: str, runs: pd.DataFrame) -> pd.DataFrame:
+    """Add per-seed rows ``gain@<setting>_<attacker>`` (metric gain_net = net ASR without a defense minus
+    net ASR with grounding) to the aware_attack runs, so that the change in grounding's gain from one
+    attacker to another is itself a paired comparison. Other groups are returned unchanged."""
+    if group != "aware_attack":
+        return runs
+    rows = []
+    for setting, pre in (("adaptive", "injected"), ("frozen", "frozen")):
+        for kind, sfx in (("std", ""), ("aligned", "_aligned"), ("conflict", "_conflict")):
+            d = paired_diffs(runs, "ASR_net", f"{pre}__none{sfx}", f"{pre}__grounding{sfx}")
+            rows += [{"arm": f"gain@{setting}_{kind}", "seed": s, "gain_net": v} for s, v in d.items()]
+    return pd.concat([runs, pd.DataFrame(rows)], ignore_index=True) if rows else runs
+
+
+# Rows of the main-text baseline table: (variant of the baselines ablation group, label)
+BASELINE_ROWS = [
+    ("none", "No defense"),
+    ("text_free", "Ignore the news"),
+    ("detect_10", "Detection filter, 10\\% FPR"),
+    ("detect_25", "Detection filter, 25\\% FPR"),
+    ("median", "Weighted median"),
+    ("trimmed", "Trimmed mean"),
+    ("grounding", "Temporal grounding"),
+]
+
+
+def baseline_table(agg: pd.DataFrame) -> str:
+    """Main-text table: net ASR of each baseline defense under both attacks, its clean-market return,
+    and the share of injected and clean documents a detection filter drops."""
+    a = agg.set_index("arm")
+
+    def cell(arm: str, col: str) -> str:
+        v = a.loc[arm, f"{col}_mean"] if arm in a.index and f"{col}_mean" in a.columns else float("nan")
+        return "--" if pd.isna(v) else f"{100 * v:.1f}".replace("-", "$-$")
+
+    n = int(a["n_seeds"].max())
+    lines = [
+        "\\begin{table}[t]",
+        "\\centering",
+        f"\\caption{{Grounding and standard defenses (mean over {n} seeds, \\%): ASR and net ASR under the adaptive "
+        "attack, net ASR under its frozen replay, clean-market return (CR) over the evaluation window, and the shares "
+        "of injected and of clean retrieved documents that the detection filter drops. The attacker screens its "
+        "candidates with the same detector at a 10\\% false-positive rate.}",
+        "\\label{tab:baselines}",
+        "\\footnotesize",
+        FIT_BEGIN,
+        "\\begin{tabular}{lrrrrrr}",
+        "\\toprule",
+        " & & \\multicolumn{2}{c}{Net ASR} & & \\multicolumn{2}{c}{Dropped} \\\\",
+        "\\cmidrule(lr){3-4}\\cmidrule(lr){6-7}",
+        "Defense & ASR & Adapt. & Frozen & CR & Inj. & Clean \\\\",
+        "\\midrule",
+    ]
+    for v, label in BASELINE_ROWS:
+        if f"injected__{v}" not in a.index:
+            continue
+        cells = [
+            cell(f"injected__{v}", "ASR"),
+            cell(f"injected__{v}", "ASR_net"),
+            cell(f"frozen__{v}", "ASR_net"),
+            cell(f"clean__{v}", "CR"),
+            cell(f"injected__{v}", "filter_recall"),
+            cell(f"clean__{v}", "filter_clean_drop"),
+        ]
+        lines.append(f"{label} & " + " & ".join(cells) + " \\\\")
+    lines += ["\\bottomrule", "\\end{tabular}", FIT_END, "\\end{table}"]
+    return "\n".join(lines)
 
 
 def _fmt_p(p: float) -> str:
@@ -704,6 +790,10 @@ def emit_numbers(agg_by_prefix: dict[str, pd.DataFrame], extra: dict[str, str], 
                 "max_drawdown",
                 "signal_deviation",
                 "hold_rate",
+                "filter_recall",
+                "filter_clean_drop",
+                "position_gap",
+                "parse_fail_rate",
             ]:
                 if f"{metric}_mean" not in agg.columns or pd.isna(r[f"{metric}_mean"]):
                     continue
@@ -910,9 +1000,11 @@ def main() -> None:
                     agg, cols, f"Ablation ({group.replace('_', ' ')}), mean$\\pm$std over seeds.", f"tab:abl_{group}"
                 )
             )
+            if group == "baselines":
+                (tex_dir / "tab_baselines.tex").write_text(baseline_table(agg))
             runs_csv = root / "ablation" / group / f"ablation_{group}_runs.csv"
             if runs_csv.exists():
-                st = compare(pd.read_csv(runs_csv), ablation_comparisons(group))
+                st = compare(with_gain_rows(group, pd.read_csv(runs_csv)), ablation_comparisons(group))
                 if not st.empty:
                     save_csv(st, root / "ablation" / group / f"ablation_{group}_stats.csv")
                     add_stats(st)
@@ -923,7 +1015,8 @@ def main() -> None:
             stats_latex(
                 pd.concat(ext_stats, ignore_index=True),
                 "Paired comparisons over seeds for the baseline defenses and the defense-aware attacker; conventions as in Table~\\ref{tab:stats_main}. "
-                "In \\emph{x\\_aligned $-$ x} rows a positive $\\Delta$ means the aware attacker is stronger.",
+                "In \\emph{x\\_aligned $-$ x} and \\emph{x\\_conflict $-$ x} rows a positive $\\Delta$ means the aware attacker is "
+                "stronger; in \\emph{gain} rows, that it shrinks grounding's gain.",
                 "tab:stats_extensions",
             )
         )

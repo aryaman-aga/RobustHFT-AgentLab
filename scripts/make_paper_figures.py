@@ -33,6 +33,7 @@ from make_report_tables import (  # noqa: E402
     impact_comparisons,
     main_comparisons,
     replication_comparisons,
+    with_gain_rows,
 )
 
 from rhal.config import load_config  # noqa: E402
@@ -94,7 +95,7 @@ def stats_for(root: Path) -> pd.DataFrame:
     ):
         f = root / "ablation" / group / f"ablation_{group}_runs.csv"
         if f.exists():
-            frames.append(compare(pd.read_csv(f), ablation_comparisons(group)))
+            frames.append(compare(with_gain_rows(group, pd.read_csv(f)), ablation_comparisons(group)))
     imp = root / "price_impact" / "price_impact_runs.csv"
     if imp.exists():
         frames.append(compare(pd.read_csv(imp), impact_comparisons()))
@@ -240,6 +241,8 @@ GENERALIZATION = [
     ("BTC-USD prices, frozen", "real_gain_frozen_grounded_net"),
     ("Aligned attacker, adaptive", "aware_adaptive_gain_aligned"),
     ("Aligned attacker, frozen", "aware_frozen_gain_aligned"),
+    ("Conflict-seeking attacker, adaptive", "aware_adaptive_gain_conflict"),
+    ("Conflict-seeking attacker, frozen", "aware_frozen_gain_conflict"),
     (r"Price impact $\gamma=1$, frozen", "imp_gain_grounded_1.0"),
     (r"Price impact $\gamma=2$, frozen", "imp_gain_grounded_2.0"),
 ]

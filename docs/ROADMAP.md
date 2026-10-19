@@ -34,15 +34,16 @@ Last updated 19 Oct 2026. Target: AAAI-27 FinFM workshop, submission deadline 20
 - Defense-aware attackers: evidence-aligned and conflict-seeking.
 - Shrink-on-conflict rule and position-gap metric.
 - Price-impact stress test.
-- Generalization figure.
+- Generalization figure and main-text baseline table.
+- Paper sections on the baselines, the generalization tests (LLM reader, BTC-USD, aware attackers, price impact) and the shrink fix.
 - Strict config validation, ruff formatting, refreshed docs.
 
 ## Next, up to 20 Nov
 
 | Window | Work |
 |---|---|
-| 19–26 Oct | Collect the running experiments; regenerate tables and figures; write the paper sections on the LLM replication, real prices, baselines, aware attackers and price impact |
-| 27 Oct – 2 Nov | Decider results; update the discussion and limitations; internal read-through |
+| 19–26 Oct | Collect the LLM-decider run and the conflict-seeking attacker against grounding alone; regenerate tables and figures; write the decider paragraph |
+| 27 Oct – 2 Nov | Trim the main text toward 7 pages; internal read-through |
 | 3–9 Nov | AAAI-27 template build (`paper/aaai/`): 7 pages plus appendix, anonymised |
 | 10–20 Nov | Polish, final checks (`make lint test report paper`), submit on OpenReview |
 

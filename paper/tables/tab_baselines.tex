@@ -1,0 +1,23 @@
+\begin{table}[t]
+\centering
+\caption{Grounding and standard defenses (mean over 100 seeds, \%): ASR and net ASR under the adaptive attack, net ASR under its frozen replay, clean-market return (CR) over the evaluation window, and the shares of injected and of clean retrieved documents that the detection filter drops. The attacker screens its candidates with the same detector at a 10\% false-positive rate.}
+\label{tab:baselines}
+\footnotesize
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lrrrrrr}
+\toprule
+ & & \multicolumn{2}{c}{Net ASR} & & \multicolumn{2}{c}{Dropped} \\
+\cmidrule(lr){3-4}\cmidrule(lr){6-7}
+Defense & ASR & Adapt. & Frozen & CR & Inj. & Clean \\
+\midrule
+No defense & 39.3 & 18.4 & 18.4 & 6.6 & -- & -- \\
+Ignore the news & 0.0 & 0.0 & 0.0 & $-$0.3 & -- & -- \\
+Detection filter, 10\% FPR & 38.9 & 16.5 & 17.0 & 6.0 & 0.0 & 10.2 \\
+Detection filter, 25\% FPR & 40.6 & 15.5 & 15.7 & 5.9 & 13.3 & 25.1 \\
+Weighted median & 35.5 & 12.4 & 12.9 & 6.7 & -- & -- \\
+Trimmed mean & 35.1 & 15.1 & 15.8 & 7.1 & -- & -- \\
+Temporal grounding & 21.6 & 7.4 & 8.3 & 2.9 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}

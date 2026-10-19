@@ -76,8 +76,18 @@ flowchart TD
 - Without a defense the attack flips 39% of days, but 21 points of that also happen with harmless paraphrases. The misinformation itself causes about 18%.
 - Grounding cuts that by 60% and beats every standard defense by 5–9 points (all statistically clear). It costs about 3.6 points of return in a clean market.
 - The detector filter caught **0%** of the attacker's fakes at its normal setting, because the attacker already screens its fakes against that detector. At a stricter setting it caught 13% and threw away 25% of the real news.
-- Microstructure features add nothing detectable on synthetic data, and the hold-on-conflict rule backfires (+1.9 points): the attacker creates the conflict that triggers it.
-- **In progress:** the local-LLM reader and decider, real BTC-USD prices, an attacker that knows the defense, fake news that also moves prices, and a shrink-on-conflict fix. Results land in `outputs/report.md` and the paper as runs finish.
+- Microstructure features add nothing detectable on synthetic data, and the hold-on-conflict rule backfires (+1.9 points): the attacker creates the conflict that triggers it. **Shrinking** the trade by the consistency score instead of holding removes the penalty (net ASR 9.3% → 7.5%).
+- **The result generalizes.** Grounding's gain holds in every setting we tried:
+
+  | Setting | Markets | Net ASR: none → grounded | Reduction (95% CI) |
+  |---|---|---|---|
+  | Local LLM (qwen2.5:7b) rates the news | 30 | 14.6% → 7.4% | 7.2 points [3.8, 10.7] |
+  | Real BTC-USD prices (2014–2026) | 67 | 16.1% → 7.8% | 8.3 points [6.2, 10.2] |
+  | Attacker aligns its fakes with the market | 100 | 19.0% → 7.9% | 11.2 points [8.9, 13.4] |
+  | Fake news also moves prices (γ = 2, frozen) | 100 | 17.0% → 6.5% | 10.5 points [8.8, 12.1] |
+
+- **Open problem.** An attacker that picks, among its fakes, the one most at odds with the market raises net ASR against the full layer by 5.6 points [4.1, 7.2].
+- **In progress:** the LLM-decider run (the LLM picks Buy/Sell/Hold itself) and the conflict-seeking attacker against grounding alone. Results land in `outputs/report.md` and the paper as runs finish.
 
 ---
 
