@@ -47,6 +47,7 @@ Last updated 19 Oct 2026. Target: AAAI-27 FinFM workshop, submission deadline 20
 |---|---|
 | 19–26 Oct | AAAI-27 build (`paper/aaai/`): anonymised, 7 pages plus appendix; OpenReview profiles for all three authors (institutional e-mail) |
 | 27 Oct – 2 Nov | Internal read-through by all authors |
+| Before 20 Nov | Decide whether to fix the lexicon's negation bug (`agent/sentiment.py` TODO): the fix needs an overnight re-run of the word-list experiments (about 7 h) and a regenerated paper |
 | 3–9 Nov | Revisions from the read-through |
 | 10–20 Nov | Polish, final checks (`make lint test report paper`), submit on OpenReview |
 

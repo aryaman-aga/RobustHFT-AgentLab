@@ -46,6 +46,10 @@ def sentiment_hits(text: str) -> list[Hit]:
             notes: list[str] = []
             # context window: 3 tokens before
             pre = t[: m.start()].split()[-3:]
+            # TODO: known bug, fix deferred. This is a substring test, so "no" inside "nordwind" or
+            # "announced" negates the next sentiment word; it changes about a third of synthetic headline
+            # scores (sign of about 3.5%). The fix (whole-word negators) changes every result, so it must
+            # come with a re-run of the lexicon experiments and a regenerated paper (docs/ROADMAP.md).
             if any(neg in " ".join(pre) for neg in L.NEGATORS):
                 w = -w
                 notes.append("negated")
