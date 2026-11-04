@@ -10,16 +10,78 @@ B.Tech Project, Department of Computer Science and Engineering, Netaji Subhas Un
 
 ## Contents
 
-1. [The project in plain words](#the-project-in-plain-words)
-2. [Quick start](#quick-start)
-3. [Running with a local LLM](#running-with-a-local-llm)
-4. [Real prices (BTC-USD)](#real-prices-btc-usd)
-5. [Experiment design](#experiment-design)
-6. [Repository layout](#repository-layout)
-7. [Development](#development)
-8. [Animated showcase](#animated-showcase)
-9. [Troubleshooting](#troubleshooting)
-10. [Citation](#citation)
+1. [Start here: set up on a new computer](#start-here-set-up-on-a-new-computer)
+2. [Live demo](#live-demo)
+3. [The project in plain words](#the-project-in-plain-words)
+4. [Running the experiments](#running-the-experiments)
+5. [Running with a local LLM](#running-with-a-local-llm)
+6. [Real prices (BTC-USD)](#real-prices-btc-usd)
+7. [The paper](#the-paper)
+8. [Experiment design](#experiment-design)
+9. [Repository layout](#repository-layout)
+10. [Development](#development)
+11. [Animated showcase](#animated-showcase)
+12. [Troubleshooting](#troubleshooting)
+13. [Citation](#citation)
+
+---
+
+## Start here: set up on a new computer
+
+You need **Python 3.12 or newer** (`python3 --version`), **git**, and **make** (built into macOS and Linux; on Windows see the commands below). About 1 GB of disk for the virtual environment. No GPU, no API keys and no internet are needed after installing.
+
+```bash
+git clone https://github.com/aryaman-aga/RobustHFT-AgentLab.git
+cd RobustHFT-AgentLab
+make install        # creates .venv and installs everything into it (nothing global), about 2 minutes
+make test           # about 140 tests, about a minute: all should pass
+make demo           # opens the live demo in your browser (Ctrl+C in the terminal stops it)
+```
+
+The repository is private: the owner has to add your GitHub account as a collaborator before `git clone` works. If `make install` says your Python is too old, install Python 3.12 or newer and run `make install PYTHON=python3.12`.
+
+**Windows** (PowerShell, without make):
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m pip install -e .
+.venv\Scripts\python -m pytest tests -q
+.venv\Scripts\python scripts\demo_server.py
+```
+
+Everything else in this README uses `make`; each target is a one-line Python command in the `Makefile` that also runs as `.venv\Scripts\python scripts\<name>.py` on Windows.
+
+**What is already in the repository, and what is not.** The paper's tables, figures and numbers (`paper/`) and the showcase data (`frontend/data.js`) are committed, so the demo, the showcase and the paper work right after cloning. The raw experiment results (`outputs/`) are not committed: they take hours to recompute (see [Running the experiments](#running-the-experiments)).
+
+---
+
+## Live demo
+
+`make demo` starts a small local web server (`scripts/demo_server.py`, standard library only, reachable only from this computer) and opens **http://127.0.0.1:8765**. It is the quickest way to show what the project does.
+
+1. **Pick a market day:** rising, falling or flat. The page shows the last 60 days of prices and the *market evidence* the defense computes from prices up to that day only.
+2. **Type the news:** a genuine headline, which both agents read, and the attacker's fake version, which only the attacked agent reads.
+3. **Run.** Two pairs of agents decide on that day. Each pair is an attacked agent and an identical *clean twin* that reads only the genuine news; if the two decide differently, the fake news **flipped** the decision.
+   - *Without defense:* the agent reads the news and glances at the last price move.
+   - *With the defense layer:* the same agent, plus the market evidence and temporal grounding. When the news contradicts the market, the page shows **"Conflict spotted"** and how far grounding pulled the decision back toward the market.
+
+Built-in examples (click them at the top of the page):
+
+| Example | What happens | The point |
+|---|---|---|
+| Fake reversal against a rising market | Without defense Buy → Hold; with the defense Buy stays Buy, conflict spotted | The defense works because the attacker cannot change prices |
+| Fake news that agrees with the market | Only the undefended agent flips; the defended agent already follows the market | No conflict, nothing to spot, and little harm |
+| When the market gives no clear signal | Both agents flip | A limit: with neutral evidence there is nothing to check the news against |
+| Record high vs record low (local LLM) | Like the first example, with free wording | Needs the local LLM reader (below) |
+
+**Options:**
+- **Risk layer:** set it to *Hold on conflict* to see the backfire the paper reports (the attacker triggers the rule, so the defended agent flips too), and to *Shrink on conflict* to see the fix.
+- **Attacker's bias prompt:** overconfidence or loss aversion, as in the experiments.
+- **News reader:** the paper's agent reads news with a fixed finance word list. It counts "record" as positive and does not know "low", so "sales hit a record low" reads as good news. For free wording switch to the **local LLM** reader: run `make llm-setup llm-pull` once (about 5 GB download) and `make llm-up` before the demo, and `make llm-down` afterwards to free the memory.
+- **Write about Nordwind Systems.** The simulated market is the stock of a fictional company, *Nordwind Systems*, so headlines should be about it ("Nordwind Systems sales touch record low"); the LLM reader rates news about other companies as irrelevant.
+
+The demo runs the experiments' own code on one day of the simulated market. The only simplifications: every headline gets the same weight, and agents start with no position and no memory. The paper's numbers come from thousands of such decisions over 100 markets, not from one example.
 
 ---
 
@@ -91,32 +153,30 @@ flowchart TD
 
 ---
 
-## Quick start
+## Running the experiments
+
+Start with a smoke run (two simulated markets, about a minute):
 
 ```bash
-make install            # .venv + requirements + editable install (nothing global)
-make data               # data/sample/{prices,news}.csv (synthetic, for data.source=csv)
-make train-detector     # outputs/models/detector.pkl (the detectability proxy)
-make test               # full test suite (about a minute)
-
-make pipeline           # 18 arms x 100 seeds (~20 min) -> outputs/pipeline/
-make ablation           # every ablation group (~4-5 h)  -> outputs/ablation/<group>/
-make price-impact       # fake news that also moves prices (~1 h) -> outputs/price_impact/
-make report             # outputs/report.md, paper/tables/*.tex, paper/figures/*.pdf
-make paper              # paper/main.pdf, IEEE build with author names (tectonic, or pdflatex + bibtex)
-make paper-aaai         # AAAI-27 submission build (anonymous); paper-aaai-zip makes the Overleaf zip
-```
-
-`make all` runs the whole chain. Every target uses `.venv/bin/python`. Quick runs: `--seeds 2` on any script, or `--seeds 30` for a fast but meaningful run. Without `make`:
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt && pip install -e .
-python scripts/run_pipeline.py --seeds 2          # logs one line per arm, e.g.
+.venv/bin/python scripts/run_pipeline.py --seeds 2 --out outputs/smoke   # one log line per arm, e.g.
 # INFO pipeline: seed=42 injected__none   MER=0.692 lift=1.41 ASR=0.417 CR=+0.171 DD=-0.043
 ```
 
-Results are reproducible: the same config and seed give bit-identical metrics on every run.
+The full study, which reproduces every number in the paper (times on an Apple M2 laptop, one CPU core):
+
+```bash
+make train-detector     # outputs/models/detector.pkl (the detectability proxy), seconds
+make pipeline           # 18 arms x 100 seeds, about 20 min -> outputs/pipeline/
+make ablation           # every ablation group, about 5 h  -> outputs/ablation/<group>/
+make price-impact       # fake news that also moves prices, about 1.5 h -> outputs/price_impact/
+make report             # outputs/report.md, paper/tables/*.tex, paper/figures/*.pdf
+make frontend           # frontend/data.js for the animated showcase
+```
+
+- `make all` runs the whole chain. Run long jobs one at a time on a laptop.
+- `--seeds 30` on any run script gives a fast but meaningful result, and `--seeds 2` a smoke test.
+- **Results are reproducible:** the same config and seed give bit-identical metrics on every run.
+- **Order matters.** `make report` and `make frontend` refuse to run until `outputs/pipeline/` exists, because they would otherwise replace the committed paper tables and showcase data with empty ones.
 
 ---
 
@@ -162,6 +222,23 @@ python scripts/run_pipeline.py --seeds 67 --out outputs/real_btc \
 - The news is template news about the fictional company, generated per seed and tied to the real next-day returns, so no text about a real asset is ever generated.
 - `grounding.analog_scale: auto` rescales the history check to the asset's typical move, using prices from before the test period only.
 - yfinance is the project's only network path for data, and it is used once to download prices. Everything downstream reads the saved CSV offline.
+
+---
+
+## The paper
+
+*RobustHFT-AgentLab: A Defense Layer Against Misinformation Attacks on LLM-Based Trading Agents.* One text, two builds (details in `paper/README.md`):
+
+```bash
+make paper              # paper/main.pdf: IEEE format, with author names (needs tectonic or a TeX installation)
+make paper-aaai         # paper/aaai/draft.pdf: anonymous AAAI-27 version, 7 pages + appendix
+make paper-aaai-zip     # paper/aaai/aaai27_source.zip for Overleaf, plus the OpenReview form text
+make supplementary      # paper/aaai/aaai27_supplementary.zip: the code with author names removed
+```
+
+- **Edit the text in `paper/sections/*.tex`**, shared by both builds.
+- Never edit `paper/tables/` or `paper/figures/` by hand: every number in the text is a macro generated from the results.
+- **Target venue:** the AAAI-27 workshop on Foundation Models and Generative AI for Finance (FinFM). Submission is on OpenReview, deadline 20 Nov 2026, 23:59 AoE. The submitted PDF must be compiled with pdfLaTeX, for example by uploading the Overleaf zip.
 
 ---
 
@@ -244,13 +321,16 @@ src/rhal/           the package
   llm/                provider clients with a disk cache: mock, Ollama (local), Anthropic, OpenAI-compatible
   backtest/           accounting with fees, slippage and next-open execution
   evaluation/         paired Simulation, metrics, statistics, price impact, report helpers
+  demo.py             the live demo: one market day, the agent with and without the defense layer
 scripts/            run_pipeline, run_ablation, run_price_impact, make_report_tables, make_paper_figures,
-                    export_frontend_data, train_detector, generate_sample_data, fetch_real_prices, setup_ollama.sh
-tests/              pytest suite: no-lookahead mutation tests, determinism, CRN, controls, LLM client, baselines
-paper/              conference manuscript (paper/README.md); tables/ and figures/*.pdf are GENERATED
+                    export_frontend_data, train_detector, generate_sample_data, fetch_real_prices, setup_ollama.sh,
+                    demo_server (make demo), export_openreview, make_supplement
+tests/              pytest suite: no-lookahead mutation tests, determinism, CRN, controls, LLM client, baselines, demo
+paper/              the manuscript (paper/README.md): sections/ (all prose), main.tex (IEEE), aaai/ (AAAI-27);
+                    tables/ and figures/*.pdf are GENERATED
 docs/               ARCHITECTURE.md (diagrams, class design), GLOSSARY.md (terms), ROADMAP.md (status and plan)
 reports/midterm/    mid-term BTP report
-frontend/           animated offline showcase (data.js is GENERATED by `make frontend`)
+frontend/           demo.html + demo.js (live demo) and index.html (animated showcase; data.js is GENERATED)
 data/               sample/ and real/ CSVs (git-ignored; written by `make data` and `make real-data`)
 outputs/            every run artifact (git-ignored; regenerate with the make targets)
 ```
@@ -279,10 +359,7 @@ make format             # ruff format + safe autofixes
 - two synchronised "with vs without" panels replaying the same 60 days (attack, placebo, grounding, risk layer);
 - the results, with confidence intervals.
 
-```bash
-make frontend                                    # writes frontend/data.js from a seed-42 replay + the latest outputs/
-python -m http.server 8765 --directory frontend  # then open http://localhost:8765
-```
+Open it at **http://127.0.0.1:8765/index.html** while `make demo` runs, or open `frontend/index.html` directly from disk. `make frontend` regenerates its data (`frontend/data.js`) from a seed-42 replay and the latest results in `outputs/`.
 
 The page shows only *labels* of generated documents (edit type, rewrite style), never their text.
 
@@ -290,6 +367,9 @@ The page shows only *labels* of generated documents (edit type, rewrite style), 
 
 ## Troubleshooting
 
+- **`make install` fails with "No matching distribution" for numpy or scipy**: your Python is older than 3.12. Install Python 3.12 or newer, delete `.venv`, and run `make install` again.
+- **The demo page says the server is not running**: start it with `make demo` and use the address it prints (opening `frontend/demo.html` from disk cannot run the agent). **Port 8765 is busy**: `.venv/bin/python scripts/demo_server.py --port 8766`.
+- **The demo's LLM reader says it cannot reach Ollama**: run `make llm-up` (after `make llm-setup llm-pull` once), or switch the reader back to the word list.
 - **`ModuleNotFoundError: rhal`**: run `pip install -e .` inside the venv, or run scripts from the repo root (they add `src/` to the path).
 - **`not enough history`**: `data.n_days − data.eval_days` must be at least 100.
 - **A config key is rejected**: config sections forbid unknown keys, so check the spelling against `configs/default.yaml`.

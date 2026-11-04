@@ -37,6 +37,9 @@ Last updated 19 Oct 2026. Target: AAAI-27 FinFM workshop, submission deadline 20
 - Generalization figure and main-text baseline table.
 - Paper sections on the baselines, the generalization tests (LLM reader, BTC-USD, aware attackers, price impact) and the shrink fix.
 - Strict config validation, ruff formatting, refreshed docs.
+- AAAI-27 submission build, Overleaf zip, OpenReview form text and anonymized code supplement.
+- Live demo (`make demo`): type a genuine and a fake headline and watch the agent with and without the defense layer.
+- README rewritten for a teammate on a new computer; `make install` checks for Python 3.12+.
 
 ## Next, up to 20 Nov
 

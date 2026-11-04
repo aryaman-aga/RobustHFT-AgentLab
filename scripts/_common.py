@@ -33,3 +33,14 @@ def parse_overrides(pairs: list[str]) -> dict:
         k, v = kv.split("=", 1)
         out[k.strip()] = yaml.safe_load(v)
     return out
+
+
+def require_results(root: Path) -> None:
+    """Stop before a generator replaces committed artifacts (paper tables and figures, frontend/data.js)
+    with empty ones: a fresh clone has no outputs/ until the experiments are run."""
+    if not (Path(root) / "pipeline" / "pipeline_runs.csv").exists():
+        raise SystemExit(
+            f"No experiment results in {root}/ yet: run `make pipeline` first (plus `make ablation price-impact` "
+            "for the full paper).\nThe paper's tables and figures and frontend/data.js are already generated and "
+            "committed; running this without results would replace them with empty ones."
+        )

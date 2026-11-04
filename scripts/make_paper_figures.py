@@ -25,7 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
-from _common import ROOT, base_parser, parse_overrides  # noqa: E402
+from _common import ROOT, base_parser, parse_overrides, require_results  # noqa: E402
 from make_report_tables import (  # noqa: E402
     REPLICATIONS,
     ablation_comparisons,
@@ -433,6 +433,7 @@ def main() -> None:
     if a.out:
         cfg = cfg.with_overrides({"output_dir": a.out})
     root = Path(cfg.output_dir)
+    require_results(root)
     summ = pd.read_csv(root / "pipeline" / "pipeline_summary.csv").set_index("arm")
     st = stats_for(root)
     fig_decomposition(summ, st)

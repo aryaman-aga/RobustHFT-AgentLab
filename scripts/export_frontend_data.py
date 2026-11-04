@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
-from _common import ROOT, base_parser, parse_overrides
+from _common import ROOT, base_parser, parse_overrides, require_results
 
 from rhal.config import load_config
 from rhal.evaluation.experiment import RunSpec, Simulation, prepare_dataset, train_detector
@@ -164,6 +164,7 @@ def main() -> None:
     cfg = load_config(a.config, parse_overrides(a.set))
     if a.out:
         cfg = cfg.with_overrides({"output_dir": a.out})
+    require_results(Path(cfg.output_dir))
     data = {"replay": replay(cfg, cfg.seed), "results": results(Path(cfg.output_dir))}
     out = ROOT / "frontend" / "data.js"
     out.parent.mkdir(exist_ok=True)

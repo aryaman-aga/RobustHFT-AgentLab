@@ -1,12 +1,15 @@
 # RobustHFT-AgentLab -- all targets use the local venv; nothing is installed globally.
 PY := .venv/bin/python
 PIP := $(PY) -m pip
+# Interpreter that creates .venv; it needs Python 3.12+ (e.g. make install PYTHON=python3.12)
+PYTHON ?= python3
 
 .PHONY: venv install install-optional data test test-fast format lint pipeline ablation price-impact report frontend train-detector \
-        paper paper-aaai paper-aaai-zip supplementary clean all llm-setup llm-up llm-down llm-pull real-data
+        demo paper paper-aaai paper-aaai-zip supplementary clean all llm-setup llm-up llm-down llm-pull real-data
 
 venv:
-	python3 -m venv .venv
+	@$(PYTHON) -c "import sys; v = sys.version_info; sys.exit(0 if v >= (3, 12) else f'Python 3.12+ is needed, found {v.major}.{v.minor}: run make install PYTHON=python3.12 (or newer)')"
+	$(PYTHON) -m venv .venv
 	$(PIP) install --upgrade pip
 
 install: venv
@@ -60,6 +63,11 @@ report:
 # Animated showcase: writes frontend/data.js, then open frontend/index.html in a browser (works offline)
 frontend:
 	$(PY) scripts/export_frontend_data.py
+
+# Interactive demo on http://127.0.0.1:8765: type a genuine and a fake headline, see the agent with and
+# without the defense layer (scripts/demo_server.py; loopback only, standard library, Ctrl+C to stop)
+demo:
+	$(PY) scripts/demo_server.py
 
 # Uses tectonic if installed (brew install tectonic), else a TeX Live pdflatex+bibtex toolchain.
 paper:

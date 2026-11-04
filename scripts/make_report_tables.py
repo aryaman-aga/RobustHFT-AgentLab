@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 
 import pandas as pd
-from _common import ROOT, base_parser, parse_overrides
+from _common import ROOT, base_parser, parse_overrides, require_results
 
 from rhal.config import load_config
 from rhal.evaluation.stats import Comparison, compare, paired_diffs
@@ -854,6 +854,7 @@ def main() -> None:
     a = p.parse_args()
     cfg = load_config(a.config, parse_overrides(a.set))
     root = Path(a.out or cfg.output_dir)
+    require_results(root)
     tex_dir = ensure_dir(ROOT / "paper" / "tables")
     aggs: dict[str, pd.DataFrame] = {}
     extra: dict[str, str] = {

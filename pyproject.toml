@@ -7,7 +7,7 @@ name = "rhal"
 version = "0.1.0"
 description = "RobustHFT-AgentLab: defensive simulation framework for testing LLM-based trading agents under subtle financial misinformation."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"  # numpy 2.5 and scipy 1.18 (requirements.txt) need 3.12
 license = { text = "MIT" }
 authors = [{ name = "BTP Student" }]
 dependencies = [
