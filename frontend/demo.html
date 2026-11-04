@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RobustHFT Live Demo</title>
+<meta name="description" content="Interactive demo: type a genuine headline and a fake one, and watch whether the trading agent's decision flips, with and without the RobustHFT defense layer.">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="demo.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="demo.html"><span class="brand-dot"></span>RobustHFT-AgentLab</a>
+    <nav aria-label="Pages">
+      <a href="#try">Try it</a>
+      <a href="#how">How it decides</a>
+      <a href="index.html">Animated showcase</a>
+    </nav>
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle light/dark theme" title="Toggle theme">◐</button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="demo-hero">
+    <div class="wrap">
+      <p class="eyebrow">Live demo · runs on this computer</p>
+      <h1>Can one fake headline flip the trading agent?</h1>
+      <p class="lede">Type a genuine headline and the attacker's fake version. Two identical agents decide on the same market day: the <b>clean twin</b> reads only the genuine news, the <b>attacked agent</b> also reads the fake. If they decide differently, the fake news <b>flipped</b> the decision. Compare the agent without a defense and with the RobustHFT defense layer, which checks the news against what the market's own prices say.</p>
+    </div>
+  </section>
+
+  <section class="block" id="try">
+    <div class="wrap">
+      <div class="offline" id="offline" hidden>
+        <b>The demo server is not running.</b> This page needs it to run the agent. In the project folder run
+        <code>make demo</code> (or <code>.venv/bin/python scripts/demo_server.py</code>) and open the address it prints.
+      </div>
+
+      <div class="presets" id="presets" aria-label="Examples"></div>
+      <p class="preset-note" id="preset-note" aria-live="polite"></p>
+
+      <div class="demo-grid">
+        <!-- inputs -->
+        <div class="demo-col">
+          <div class="dcard">
+            <div class="step"><span>1</span>Market day</div>
+            <div class="mkt-tabs" role="tablist" id="scenarios" aria-label="Market day"></div>
+            <svg class="spark" id="spark" viewBox="0 0 520 150" role="img" aria-label="Price over the last 60 days"></svg>
+            <div class="evidence" id="evidence"></div>
+          </div>
+
+          <div class="dcard">
+            <div class="step"><span>2</span>News the agents read</div>
+            <label class="lbl-genuine" for="genuine">Genuine news <small>read by both agents · one headline per line</small></label>
+            <textarea id="genuine" rows="3" spellcheck="false"></textarea>
+            <label class="lbl-fake" for="injected">Attacker's fake news <small>read only by the attacked agent · one per line</small></label>
+            <textarea id="injected" rows="3" spellcheck="false"></textarea>
+
+            <details class="opts" id="opts">
+              <summary>Options</summary>
+              <div class="opt-row">
+                <label for="reader">News reader</label>
+                <select id="reader">
+                  <option value="lexicon">Finance word list (the paper's agent, instant)</option>
+                  <option value="llm">Local LLM (needs make llm-up)</option>
+                </select>
+              </div>
+              <div class="opt-row">
+                <label for="bias">Attacker's bias prompt</label>
+                <select id="bias">
+                  <option value="none">None</option>
+                  <option value="overconfidence">Overconfidence (acts on weaker signals)</option>
+                  <option value="loss_aversion">Loss aversion (bad news counts 1.7×)</option>
+                </select>
+              </div>
+              <div class="opt-row">
+                <label for="risk">Risk layer (defended agent)</label>
+                <select id="risk">
+                  <option value="off">Off (grounding only)</option>
+                  <option value="hold">Hold on conflict (the paper's original rule)</option>
+                  <option value="shrink">Shrink on conflict (the fix)</option>
+                </select>
+              </div>
+              <p class="hint" id="reader-hint"></p>
+            </details>
+
+            <button class="run" id="run" type="button">▶ Run both agents</button>
+            <p class="err" id="err" role="alert" hidden></p>
+          </div>
+        </div>
+
+        <!-- results -->
+        <div class="demo-col" aria-live="polite">
+          <div class="verdict-box" id="verdict"><span class="muted">Pick an example above or type your own headlines, then press Run.</span></div>
+          <div class="pairs" id="pairs"></div>
+          <div class="dcard" id="heads-card" hidden>
+            <div class="step"><span>3</span>How each headline was read</div>
+            <div id="heads"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">How it decides</div>
+        <h2>The same steps the experiments run, with this example's numbers</h2>
+        <p>Numbers are for the attacked agent of the last run. Run an example to fill them in.</p>
+      </div>
+      <ol class="how" id="how-steps"></ol>
+      <p class="note">Two simplifications in this demo: every headline gets the same weight (the experiments weight by relevance and recency), and every agent starts with no position and no memory of earlier days. The paper's results come from thousands of such decisions over 100 simulated markets, not from one example.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="safety">
+        <span aria-hidden="true">🛡</span>
+        <div><b>Runs locally.</b> The demo server listens only on this computer and sends nothing anywhere; the local LLM reader, if you switch it on, also runs on this computer. The examples are about a fictional company, <i>Nordwind Systems</i>. The market is simulated and there is no trading. Not investment advice.</div>
+      </div>
+      <p class="muted">See also the <a href="index.html">animated showcase</a> of whole 60-day replays and the full results.</p>
+    </div>
+  </footer>
+</main>
+
+<script src="demo.js"></script>
+</body>
+</html>

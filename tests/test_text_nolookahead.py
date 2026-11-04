@@ -4,6 +4,7 @@ The retriever's TF-IDF vocabulary/IDF and the attacker's similarity filter used 
 on the WHOLE news corpus, so editing only future articles moved earlier decisions (an
 audit found 12 of 180). Both are now fit on news dated before the evaluation window.
 """
+
 import json
 import os
 import subprocess
@@ -25,13 +26,19 @@ def test_decisions_do_not_depend_on_future_news_text(small_cfg, small_dataset, d
     mutated, n = _with_future_news_replaced(small_dataset, small_dataset.dates[cut])
     assert n > 0
     k = cut - t0 + 1  # steps whose decision date is on or before the cut date
-    for spec in (RunSpec("clean__none", "none"), RunSpec("placebo__none", "placebo"), RunSpec("injected__grounded_risk", "misgen", True, True, True)):
+    for spec in (
+        RunSpec("clean__none", "none"),
+        RunSpec("placebo__none", "placebo"),
+        RunSpec("injected__grounded_risk", "misgen", True, True, True),
+    ):
         a = Simulation(small_cfg, small_dataset, detector, 42).run(spec)
         b = Simulation(small_cfg, mutated, detector, 42).run(spec)
         for side in ("treated_steps", "shadow_steps"):
             sa, sb = getattr(a, side)[:k], getattr(b, side)[:k]
             for field in ("retrieved_ids", "raw_signal", "text_signal", "action", "cf_action"):
-                assert [s.get(field) for s in sa] == [s.get(field) for s in sb], f"{spec.name} {side} {field} reads future news"
+                assert [s.get(field) for s in sa] == [s.get(field) for s in sb], (
+                    f"{spec.name} {side} {field} reads future news"
+                )
 
 
 def test_sentiment_is_identical_across_hash_seeds():
@@ -47,6 +54,8 @@ def test_sentiment_is_identical_across_hash_seeds():
     outs = []
     for hash_seed in ("1", "2", "3"):
         env = {**os.environ, "PYTHONHASHSEED": hash_seed}
-        outs.append(subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True).stdout)
+        outs.append(
+            subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True).stdout
+        )
     assert outs[0] == outs[1] == outs[2]
     assert json.loads(outs[0])[0]  # sanity: phrases were printed

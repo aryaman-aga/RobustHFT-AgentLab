@@ -15,6 +15,7 @@ we analyse the per-seed differences d_s = X(A, s) - X(B, s) and report:
 
 All resampling goes through rhal.seeding.rng, so the statistics are deterministic.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -109,8 +110,22 @@ def compare(runs: pd.DataFrame, comparisons: list[Comparison], level: float = 0.
         if d.empty:
             continue
         lo, hi = bootstrap_ci(d.to_numpy(), level=level, seed=seed)
-        out.append({"key": c.key, "family": c.family, "label": c.label, "metric": c.metric, "metric_b": c.metric_b or c.metric, "arm_a": c.arm_a, "arm_b": c.arm_b,
-                    "n": len(d), "mean_diff": float(d.mean()), "ci_lo": lo, "ci_hi": hi, "p": sign_flip_pvalue(d.to_numpy(), seed=seed)})
+        out.append(
+            {
+                "key": c.key,
+                "family": c.family,
+                "label": c.label,
+                "metric": c.metric,
+                "metric_b": c.metric_b or c.metric,
+                "arm_a": c.arm_a,
+                "arm_b": c.arm_b,
+                "n": len(d),
+                "mean_diff": float(d.mean()),
+                "ci_lo": lo,
+                "ci_hi": hi,
+                "p": sign_flip_pvalue(d.to_numpy(), seed=seed),
+            }
+        )
     df = pd.DataFrame(out)
     if df.empty:
         return df

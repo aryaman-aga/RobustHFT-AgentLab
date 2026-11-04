@@ -10,6 +10,7 @@ SAFETY BOUNDARY
 * There is no broker connection, no order routing, and no live data path.
 * Nothing in this package constitutes investment advice.
 """
+
 from __future__ import annotations
 
 __version__ = "0.1.0"

@@ -4,6 +4,7 @@ Runs *after* the policy and can only make the position smaller or force an exit;
 it never initiates a trade the policy did not ask for (except stop/take-profit).
 Every override is logged so the evaluation can attribute behaviour.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,8 +38,21 @@ class PortfolioState:
 
 
 class RiskLayer:
-    def __init__(self, *, enabled: bool, max_position: float, vol_target: float, stop_loss: float, take_profit: float,
-                 hold_on_conflict: bool, conflict_threshold: float, min_confidence: float, drawdown_throttle: float, allow_short: bool = False):
+    def __init__(
+        self,
+        *,
+        enabled: bool,
+        max_position: float,
+        vol_target: float,
+        stop_loss: float,
+        take_profit: float,
+        hold_on_conflict: bool,
+        conflict_threshold: float,
+        min_confidence: float,
+        drawdown_throttle: float,
+        allow_short: bool = False,
+        conflict_mode: str = "hold",
+    ):
         self.enabled = enabled
         self.max_position = max_position
         self.vol_target = vol_target
@@ -49,6 +63,10 @@ class RiskLayer:
         self.min_confidence = min_confidence
         self.drawdown_throttle = drawdown_throttle
         self.allow_short = allow_short
+        # what the conflict rule does when consistency c < conflict_threshold:
+        #   hold   -- no new trade (the paper's rule; changes the action, so an attacker can trigger it)
+        #   shrink -- keep the action but move the position only a fraction c of the way to its target
+        self.conflict_mode = conflict_mode
 
     def apply(self, out: PolicyOutput, state: PortfolioState, vol_5: float) -> tuple[Action, float, list[str]]:
         """Return (final_action, target_position_fraction, overrides)."""
@@ -57,7 +75,13 @@ class RiskLayer:
         cur = state.position_frac
         if not self.enabled:
             size = self.max_position
-            target = size if action == Action.BUY else (-size if (action == Action.SELL and self.allow_short) else 0.0) if action == Action.SELL else cur
+            target = (
+                size
+                if action == Action.BUY
+                else (-size if (action == Action.SELL and self.allow_short) else 0.0)
+                if action == Action.SELL
+                else cur
+            )
             return action, float(target), overrides
 
         # 1. stop-loss / take-profit on an open long position (checked at close t, executed t+1 open)
@@ -75,10 +99,15 @@ class RiskLayer:
             overrides.append(f"low_confidence({out.confidence:.2f})")
             action = Action.HOLD
 
-        # 3. hold on text/market conflict
+        # 3. text/market conflict: hold (default) or shrink the move toward the target by c
+        step_frac = 1.0
         if self.hold_on_conflict and action != Action.HOLD and out.consistency < self.conflict_threshold:
-            overrides.append(f"hold_on_conflict(c={out.consistency:.2f})")
-            action = Action.HOLD
+            if self.conflict_mode == "shrink":
+                overrides.append(f"shrink_on_conflict(c={out.consistency:.2f})")
+                step_frac = float(out.consistency)
+            else:
+                overrides.append(f"hold_on_conflict(c={out.consistency:.2f})")
+                action = Action.HOLD
 
         # 4. volatility-scaled sizing + drawdown throttle
         size = self.max_position
@@ -95,4 +124,5 @@ class RiskLayer:
             target = -size * min(1.0, 0.5 + out.confidence) if self.allow_short else 0.0
         else:
             target = cur
+        target = cur + step_frac * (target - cur)  # shrink: only part of the way (step_frac=1 otherwise)
         return action, float(target), overrides

@@ -1,5 +1,3 @@
-import pytest
-
 from rhal.agent.risk import PortfolioState
 from rhal.backtest import Backtester
 

@@ -3,6 +3,7 @@
 Provenance labels are mandatory on every news record so that synthetic text
 can never be confused with real text anywhere in the pipeline.
 """
+
 from __future__ import annotations
 
 from enum import Enum
@@ -74,6 +75,9 @@ class Decision(BaseModel):
     retrieved_ids: list[str] = Field(default_factory=list)
     retrieved_provenance: list[str] = Field(default_factory=list)
     risk_overrides: list[str] = Field(default_factory=list)
+    parse_failed: bool = False  # decider mode: the LLM answer could not be read (became Hold)
+    filter_visible: list[str] = Field(default_factory=list)  # detection baseline: provenance of visible docs
+    filter_dropped: list[str] = Field(default_factory=list)  # ... and of the docs it dropped
 
 
 class BiasConfig(BaseModel):

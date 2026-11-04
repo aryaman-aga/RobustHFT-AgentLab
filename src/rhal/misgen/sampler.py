@@ -4,6 +4,7 @@
 Return-dependent adjustment: CR > 1 boosts overconfidence by delta, CR < 1
 boosts loss aversion by delta, then re-normalise.
 """
+
 from __future__ import annotations
 
 import numpy as np

@@ -6,8 +6,18 @@ def _pool_and_dates():
     dates = [f"2024-01-{d:02d}" for d in range(1, 11)]
     pool = NewsPool()
     for i, d in enumerate(dates):
-        pool.add(NewsItem(id=f"c{i}", date=d, text=f"Nordwind Systems revenue guidance shares day {i}", provenance="clean"))
-        pool.add(NewsItem(id=f"s{i}", date=d, text=f"Nordwind Systems revenue guidance shares day {i} synthetic", provenance="synthetic", parent_id=f"c{i}"))
+        pool.add(
+            NewsItem(id=f"c{i}", date=d, text=f"Nordwind Systems revenue guidance shares day {i}", provenance="clean")
+        )
+        pool.add(
+            NewsItem(
+                id=f"s{i}",
+                date=d,
+                text=f"Nordwind Systems revenue guidance shares day {i} synthetic",
+                provenance="synthetic",
+                parent_id=f"c{i}",
+            )
+        )
     return pool, dates
 
 

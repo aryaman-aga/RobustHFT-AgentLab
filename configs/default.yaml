@@ -6,9 +6,10 @@ seed: 42
 output_dir: outputs
 
 data:
-  source: synthetic            # synthetic | csv | yfinance
+  source: synthetic            # synthetic | csv | real (real = data.real_prices, one historical window per seed)
   csv_prices: data/sample/prices.csv
   csv_news: data/sample/news.csv
+  real_prices: data/real/btc_usd.csv   # written once by scripts/fetch_real_prices.py (git-ignored)
   symbol: SYNTH
   n_days: 400                  # synthetic history length (first ~250 = warmup/analog library)
   eval_days: 60                # trading days evaluated (paper: 60 BTC days)
@@ -34,6 +35,7 @@ grounding:
   top_k: 5
   horizon: 5                   # analog forward-outcome horizon (must be fully in the past)
   strength: 0.7                # kappa: how strongly inconsistent text is shrunk toward market evidence
+  analog_scale: 0.03           # typical H-day move scaling analog outcomes in s_mkt; "auto" = from pre-window prices
 
 retrieval:
   method: tfidf                # tfidf | bm25 | embed (embed requires sentence-transformers)
@@ -43,7 +45,6 @@ retrieval:
 
 misgen:
   enabled: true
-  mode: mock                   # mock | llm   (llm requires provider != mock)
   bias_prob: 0.7               # p in Algorithm 1
   use_bias: true
   use_minor: true
@@ -57,10 +58,14 @@ misgen:
   det_threshold: null          # tau_det; null = detector's FPR-calibrated threshold
   injection_ratio: 1.0         # synthetic docs per clean doc
   placebo: false               # if true, inject benign paraphrases (noise-floor control)
+  evidence_aware: none         # none | aligned | conflict: defense-aware attacker (uses public market evidence <= t)
 
 agent:
-  mode: mock                   # rule | mock | llm
+  mode: mock                   # rule | mock | llm   (mock = transparent surrogate; llm = the LLM picks the action)
+  text_scorer: lexicon         # lexicon | llm   (llm = the LLM reads each news item; the defense layer is unchanged)
   action_threshold: 0.15       # |signal| above which the agent acts
+  text_agg: mean               # mean | median | trimmed: pooling of retrieved-document scores (robust-aggregation baseline)
+  trim_frac: 0.25              # weight trimmed from each tail when text_agg=trimmed
   text_weight: 0.75            # ungrounded agent leans on text (mirrors LLM overreaction)
   memory_len: 5
   reflection: true
@@ -73,9 +78,14 @@ risk:
   stop_loss: 0.06
   take_profit: 0.12
   hold_on_conflict: true
+  conflict_mode: hold          # hold | shrink: on conflict, force Hold, or keep the action and move only c of the way
   conflict_threshold: 0.6      # consistency below this -> hold (|text-market| > 0.8)
   min_confidence: 0.3
   drawdown_throttle: 0.10      # halve size when DD exceeds this
+
+defense:                     # baseline defenses compared against grounding
+  detect_filter: false         # drop retrieved docs the detectability model flags
+  detect_fpr: 0.10             # threshold = this flag rate on clean news dated before the evaluation window
 
 backtest:
   initial_cash: 100000.0

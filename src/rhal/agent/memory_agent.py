@@ -5,6 +5,7 @@ Long-term      : running *text-trust* estimate = EWMA of sign-agreement between
                  yesterday's text signal and today's realised return, plus insights.
 The trust estimate is only consumed when ``adaptive_trust`` is on (ablation knob).
 """
+
 from __future__ import annotations
 
 from collections import deque

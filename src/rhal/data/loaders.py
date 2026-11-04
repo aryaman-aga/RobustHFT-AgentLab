@@ -12,15 +12,15 @@ import pandas as pd
 from .validate import validate_news, validate_prices
 
 
-def load_prices(path: str | Path) -> pd.DataFrame:
-    return validate_prices(pd.read_csv(path))
+def load_prices(path: str | Path, repair: bool = False) -> pd.DataFrame:
+    return validate_prices(pd.read_csv(path), repair=repair)
 
 
 def load_news(path: str | Path) -> pd.DataFrame:
     return validate_news(pd.read_csv(path))
 
 
-def download_yfinance(symbol: str, start: str, end: str) -> pd.DataFrame:
+def download_yfinance(symbol: str, start: str, end: str | None = None) -> pd.DataFrame:
     """Download daily OHLCV from Yahoo Finance (optional dependency).
 
     Raises ImportError with a clear message if yfinance is not installed.
@@ -37,4 +37,4 @@ def download_yfinance(symbol: str, start: str, end: str) -> pd.DataFrame:
     df = raw.reset_index().rename(
         columns={"Date": "date", "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}
     )
-    return validate_prices(df[["date", "open", "high", "low", "close", "volume"]])
+    return validate_prices(df[["date", "open", "high", "low", "close", "volume"]], repair=True)

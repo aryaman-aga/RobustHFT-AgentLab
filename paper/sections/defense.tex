@@ -1,0 +1,39 @@
+\section{The RobustHFT Defense Layer}\label{sec:defense}
+The defense layer turns market data into evidence, uses the evidence to ground the text signal, and passes the decision through a risk layer (Algorithm~\ref{alg:defense}). The attacker can edit none of its inputs except the text signal it is meant to check.
+
+\begin{algorithm}[t]
+\caption{RobustHFT defense layer on day $t$}\label{alg:defense}
+\small
+\begin{algorithmic}[1]
+\Require text signal $s_{\mathrm{text}}$; features $\mathbf{z}_{\le t}$; prices $P_{\le t}$
+\State $s_0\gets\tanh(\mathbf{w}^{\top}\mathbf{z}_t)$ \Comment{fixed weights}
+\State $A_t\gets$ $k$ windows ending at $e\le t-H$ most similar to the window ending at $t$
+\State $\bar r_t\gets\frac{1}{k}\sum_{e\in A_t}\log(P_{e+H}/P_e)$ \Comment{outcomes known by $t$}
+\State $s_{\mathrm{mkt}}\gets\tanh\big(0.7\artanh s_0+0.3\tanh(\bar r_t/0.03)\big)$
+\State $c\gets 1-\tfrac12\lvert s_{\mathrm{text}}-s_{\mathrm{mkt}}\rvert$ \Comment{consistency}
+\State $s\gets\lambda s_{\mathrm{text}}+(1-\lambda)s_{\mathrm{mkt}}$;\ \ $s\gets s-\kappa(1-c)(s-s_{\mathrm{mkt}})$
+\State $a\gets$ Buy if $s>\theta$, Sell if $s<-\theta$, else Hold
+\State \textbf{if} stop-loss or take-profit is hit \textbf{then return} Sell
+\State \textbf{if} $a\neq$ Hold \textbf{and} (confidence $<0.3$ \textbf{or} $c<0.6$) \textbf{then} $a\gets$ Hold
+\State $q\gets\min(1,\sigma^{*}/\sigma_{5,t})$, halved if the drawdown exceeds 10\%
+\State \Return action $a$ with position size $q$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Market evidence.} Features are $z$-scored over trailing 60-day windows and clipped at $\pm4$: 1-day return, 5-day volatility, 20-day drawdown, 5- and 20-day momentum, a short-versus-long trend divergence and a residual anomaly. \emph{Microstructure proxies} add a range-based spread~\cite{corwin2012spread}, Garman--Klass variance~\cite{garman1980estimation}, order-flow imbalance~\cite{cont2014price}, volume shock, a high--low range ratio and Amihud illiquidity~\cite{amihud2002illiquidity}. A fixed-weight score $s_0=\tanh(\mathbf{w}^{\top}\mathbf{z}_t)$ (no fitting, hence no leakage) is blended with the outcomes of \emph{historical analogs}: the $k=5$ past 30-day windows whose feature trajectories are most similar (cosine) to the current one. A window ending at $e$ is admissible on day $t$ only if $e+H\le t$, so its $H=5$-day forward return is already known. This is stricter than the common rule $e<t$, which leaks up to $H-1$ days of future prices. The result is
+\begin{equation}
+s_{\mathrm{mkt}}=\tanh\!\big(0.7\artanh s_0+0.3\tanh(\bar r_t/0.03)\big),\label{eq:smkt}
+\end{equation}
+where $\bar r_t$ is the analogs' mean forward log return and $0.03$ is a typical 5-day move.
+
+\textbf{Temporal grounding.} The consistency $c=1-\frac{1}{2}\lvert s_{\mathrm{text}}-s_{\mathrm{mkt}}\rvert\in[0,1]$ measures how well the news agrees with the evidence. Grounding shrinks inconsistent signals toward the evidence:
+\begin{equation}
+s_g=s-\kappa\,(1-c)\,(s-s_{\mathrm{mkt}}),\qquad \kappa=\val{Kappa}.
+\end{equation}
+Text that agrees with the market passes unchanged, while text that contradicts it is moved up to a fraction $\kappa$ of the way toward the evidence. The grounded agent also adds the direction of the evidence to its retrieval query (e.g.\ growth terms when $s_{\mathrm{mkt}}>0.2$), as an agent that reads the market first would.
+
+\textbf{Risk layer.} After the policy, the risk layer can only hold, shrink or exit, never open a trade the policy did not ask for. Its rules are stop-loss (6\%) and take-profit (12\%) exits checked at the close; a confidence gate (no new trade below $0.3$); \emph{hold-on-conflict} (no new trade when $c<0.6$); volatility-targeted sizing $\min(1,\sigma^{*}/\sigma_{5,t})$ with $\sigma^{*}=1.5\%$ per day; and a throttle that halves the size beyond a 10\% drawdown. Sec.~\ref{sec:results-components} replaces hold-on-conflict with \emph{shrink-on-conflict}, which moves the position only a fraction $c$ of the way toward its new target.
+
+\textbf{LLM agents.} With an LLM as the \emph{reader}, the LLM replaces the lexicon: it rates each retrieved document's implication for the next-day price on $[-1,1]$, and Algorithm~\ref{alg:defense} runs unchanged on these scores. Responses follow a JSON schema, are generated at temperature 0, and are cached by prompt hash, so runs are reproducible. The harness can also let the LLM choose the action itself, with the market evidence in its prompt; we leave that setting to future work.
+
+\textbf{No lookahead by construction.} Features use trailing windows only, orders fill at the next open, and analogs obey $e+H\le t$. The retrieval TF-IDF and the attacker's similarity filter are fit only on news dated before the evaluation window. Tests multiply all prices after a cut-off by five, or replace every article dated after it, and require bit-identical decisions before the cut-off.

@@ -1,4 +1,5 @@
 """End-to-end: all arms run, clean arm is a perfect pair, everything is deterministic."""
+
 import numpy as np
 
 from rhal.evaluation.experiment import RunSpec, Simulation, standard_arms
@@ -32,17 +33,15 @@ def test_determinism_across_runs(small_cfg, small_dataset, detector):
 
 def test_decision_does_not_depend_on_future(small_cfg, small_dataset, detector):
     """Mutate prices strictly after the evaluation window's last needed row; decisions must be unchanged."""
-    import copy
-
-    from rhal.evaluation.experiment import Dataset, prepare_dataset
+    from rhal.evaluation.experiment import Dataset
     from rhal.features import build_feature_frame
 
-    cfg2 = small_cfg.with_overrides({"data.n_days": small_cfg.data.n_days + 30})
-    ds2 = prepare_dataset(cfg2, 42)  # same seed -> same first n_days? (no: rng stream differs) so mutate instead:
     ds = small_dataset
     n = len(ds.dates)
     prices = ds.prices.copy()
-    prices.loc[n - 1 :, ["open", "high", "low", "close"]] *= 3.0  # only the very last row (never read as a decision input except as exec/mark)
+    prices.loc[n - 1 :, ["open", "high", "low", "close"]] *= (
+        3.0  # only the very last row (never read as a decision input except as exec/mark)
+    )
     # Build a sim whose eval window ends before the mutated row
     cfg3 = small_cfg.with_overrides({"data.eval_days": small_cfg.data.eval_days - 1})
     feats = build_feature_frame(prices, ds.intraday, micro=True)
@@ -50,7 +49,7 @@ def test_decision_does_not_depend_on_future(small_cfg, small_dataset, detector):
     ds_mut = Dataset(prices, ds.news, ds.intraday, feats, ds.dates)
     sim_a = Simulation(cfg3, ds, detector, 42)
     sim_b = Simulation(cfg3, ds_mut, detector, 42)
-    # evaluation windows: [t0, t1) with t1 = n-2 -> never touches row n-1
+    # decisions are made at t <= n-2, so no decision input reads the mutated row n-1 (only the last fill/mark does)
     ra, rb = sim_a.run(RunSpec("g", "misgen", True, True, True)), sim_b.run(RunSpec("g", "misgen", True, True, True))
     assert [s["action"] for s in ra.treated_steps] == [s["action"] for s in rb.treated_steps]
     assert np.allclose([s["raw_signal"] for s in ra.treated_steps], [s["raw_signal"] for s in rb.treated_steps])

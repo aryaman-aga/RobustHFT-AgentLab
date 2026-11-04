@@ -1,0 +1,45 @@
+% Technical appendix (after the references). Each main file opens it with its own appendix command.
+\section{Example Market}\label{app:example}
+Fig.~\ref{fig:replay} shows one simulated market under the same recorded attack: the undefended agent and its twin disagree on \val{ReplayFlipsNone} of \val{ReplayDays} days, and the grounded agent and its twin on \val{ReplayFlipsGrounded}.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/fig_replay.pdf}
+\caption{One simulated market (seed \val{ReplaySeed}) under the same recorded attack. Filled triangles are the agent's trades, outlines its clean twin's, and shaded days are flips. Grounding (b) keeps the agent closer to its twin than no defense (a).}
+\label{fig:replay}
+\end{figure*}
+
+\section{Placebo Ladder and One-Step Counterfactual ASR}\label{app:ladder}
+\textbf{The ladder.} We add the attack's ingredients one at a time on top of identical retrieval, seeds and tapes, so that consecutive differences isolate one component of ASR:
+\begin{equation}
+\asr_{\mathrm{attack}}=\underbrace{\asr_{\mathrm{plc}}}_{\text{noise}}+\underbrace{\Delta_{\mathrm{count}}}_{\text{count}}+\underbrace{\Delta_{\mathrm{bias}}}_{\text{bias}}+\underbrace{\Delta_{\mathrm{meaning}}}_{\text{content}}.
+\end{equation}
+The placebo paraphrases every clean item. The \emph{count-matched} placebo paraphrases only the items the attack actually injected, and the \emph{bias-matched} placebo adds the attack's daily bias prompts. All placebo variants draw the same paraphrase for a given (day, item), so each control's pool is a subset of the previous one's, and $\Delta_{\mathrm{meaning}}$ is the effect of the misinformation itself.
+
+\textbf{One-step counterfactual ASR.} After the first flip the twins' portfolios and memories differ, so later flips may reflect accumulated state rather than the day's text. Each day a throw-away copy of the agent therefore decides with copies of the clean twin's memory and portfolio but the treated agent's documents and bias; cf-ASR is its disagreement rate with the twin. It only reads copies, which a test checks.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_decomposition.pdf}
+\caption{ASR decomposed by the placebo-control ladder on the frozen attack (mean over \val{NseedsRun} seeds). Bars sum to the attack's ASR; the article-count component is at most \val{DecCountMaxAbs}\,pp in size and too small to see. Grounding shrinks both the retrieval noise and the content effect.}
+\label{fig:decomposition}
+\end{figure}
+
+\textbf{Results.} The placebo alone flips \val{MPlaceboNoneASR}\% of the undefended agent's decisions: adding documents reshuffles its top-$k$, near-duplicates displace other items, and decisions near the action threshold flip. Matching the article count adds nothing detectable (\cmp{CmpDecCountNone}, \pholm{CmpDecCountNone}), the attacker's bias prompts add \cmp{CmpDecBiasNone} (\pholm{CmpDecBiasNone}), and the content of the misinformation adds \cmp{CmpDecMeaningNone} (\pholm{CmpDecMeaningNone}), about \val{ShareMeaningOfNaive}\% of the naive ASR (Fig.~\ref{fig:decomposition}). Naive ASR therefore overstates the effect of the content \val{RatioNaiveToMeaning}-fold, and even net ASR includes the bias prompts. Grounding lowers the noise floor, cutting placebo ASR by \cmp{CmpPlaceboGrounded}, and cuts the content effect from \val{CmpDecMeaningNone} to \cmp{CmpDecMeaningGrounded}.
+
+Two checks show that these conclusions do not depend on how flips are counted. The one-step counterfactual ASR stays close to the sequential ASR: the gap is \cmp{CmpCfGapNone} for the undefended agent (\pholm{CmpCfGapNone}) and \cmp{CmpCfGapGroundedRisk} with the full layer (\pholm{CmpCfGapGroundedRisk}), so drift between the twins inflates ASR by less than one point. The fully matched counterfactual estimate of the content effect, \cmp{CmpCfMeaningNone}, agrees with $\Delta_{\mathrm{meaning}}$.
+
+\section{Attack Components and Retrieval Breadth}\label{app:attack}
+Three attack components detectably raise net ASR (Table~\ref{tab:stats_ablation}): the minor edits themselves (\cmp{CmpAblAttackWoMinorNet}), detector filtering (\cmp{CmpAblAttackWoFilteringNet}) and the bias prompts (\cmp{CmpAblAttackWoBiasNet}), the last consistent with $\Delta_{\mathrm{bias}}$. Without filtering, the first candidate is always accepted, including the causal and vague-attribution edits that the detector almost always flags (Table~\ref{tab:detector}). Strategy feedback and style rewriting raise exposure (MER $+$\val{CmpAblAttackWoFeedbackMer} and $+$\val{CmpAblAttackWoRewriteMer}\pp{}) but not net ASR: with a placebo floor near \val{MPlaceboNoneASR}\%, the P\'olya urn's flip signal is mostly noise, so it learns what gets retrieved rather than what changes decisions. Net ASR is higher only with the narrowest retrieval ($k=2$ vs.\ $4$: \cmp{CmpAblRetKTwoNet}; $8$ vs.\ $4$: \cmp{CmpAblRetKEightNet}).
+
+\section{Full Statistical Results}\label{app:stats}
+Tables~\ref{tab:stats_main}--\ref{tab:stats_replications} list every paired comparison behind the claims above, with mean per-seed differences, 95\% bootstrap intervals and Holm-corrected permutation $p$-values. Table~\ref{tab:detector} reports the detectability filter.
+\IfFileExists{tables/stats_main.tex}{\input{tables/stats_main.tex}}{}
+\IfFileExists{tables/stats_controls.tex}{\input{tables/stats_controls.tex}}{}
+\IfFileExists{tables/stats_ablation.tex}{\input{tables/stats_ablation.tex}}{}
+\IfFileExists{tables/stats_baselines.tex}{\input{tables/stats_baselines.tex}}{}
+\IfFileExists{tables/stats_aware.tex}{\input{tables/stats_aware.tex}}{}
+\IfFileExists{tables/stats_conflict.tex}{\input{tables/stats_conflict.tex}}{}
+\IfFileExists{tables/stats_impact.tex}{\input{tables/stats_impact.tex}}{}
+\IfFileExists{tables/stats_replications.tex}{\input{tables/stats_replications.tex}}{}
+\IfFileExists{tables/detector.tex}{\input{tables/detector.tex}}{}

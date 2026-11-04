@@ -5,6 +5,7 @@ Rolling operations are trailing; nothing uses ``.shift(-k)`` or full-sample
 statistics. The test-suite verifies this by mutating future rows and asserting
 that rows <= t are byte-identical.
 """
+
 from __future__ import annotations
 
 import numpy as np

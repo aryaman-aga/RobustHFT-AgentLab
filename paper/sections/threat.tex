@@ -1,0 +1,19 @@
+\section{Threat Model and Agent}\label{sec:threat}
+\begin{figure*}[t]
+\centering
+\input{figures/fig_harness.tex}
+\caption{\rhal{}. The RobustHFT defense layer (blue) sits between an LLM trading agent and its orders: market evidence that the attacker cannot edit grounds the agent's text signal, and a risk layer can only reduce exposure. For evaluation, an attacked agent (top) and an identical clean twin (bottom) trade the same market in lockstep and differ only in the text they read. MisGen injects edited copies of the day's news and sets a bias prompt in the attacked agent's context. A day on which the two decisions differ is a \emph{flip}; the share of flipped days is the attack success rate (ASR). In the adaptive setting, strategies retrieved on flipped days are reinforced.}
+\label{fig:harness}
+\end{figure*}
+
+\textbf{Setting and attacker.} Each day $t$ the market publishes a set $\mathcal{N}_t$ of news items about one asset. An agent retrieves the top-$k$ relevant items from the last few days, combines them with market observations, and chooses $a_t\in\{\text{Buy},\text{Sell},\text{Hold}\}$, executed at the next day's open. The attacker can add documents to the agent's news pool and place a behavioral-bias prompt in its context, but cannot touch prices, the agent's code or the clean news. Its goal is to change decisions. Following AutoRedTrader~\cite{liu2026autoredtrader}, MisGen builds each candidate from three operator spaces: a \emph{bias} prompt (overconfidence, loss aversion, anchoring, herding or confirmation); a \emph{minor edit} of one of eight types (direction flip, sentiment shift, numerical, temporal, entity, concept, causal or vague attribution); and an optional \emph{style rewrite} (news or academic register). A candidate is kept only if its TF-IDF similarity to the source is at least $\tau_{\mathrm{sim}}$ and a detectability classifier scores it below a threshold calibrated to a \val{DetFPR}\% false-positive rate on clean text. Strategies are sampled from a P\'olya urn,
+\begin{equation}
+P(s)\propto 1+\alpha\, h_s,
+\end{equation}
+where $h_s$ counts how often strategy $s$ was retrieved on a day whose decision flipped~\cite{mahmoud2008polya}. Sec.~\ref{sec:setup} also gives the attacker the public market evidence that the defense uses.
+
+\textbf{Agent.} Following InvestorBench~\cite{li2025investorbench}, the agent has perception, profile, memory and action modules. Our experiments use a transparent surrogate policy that scores each retrieved document with a negation- and intensity-aware finance lexicon~\cite{loughran2011liability}. It forms a retrieval-weighted text signal $s_{\mathrm{text}}\in[-1,1]$, applies the day's bias as an explicit parameter shift (e.g.\ overconfidence lowers the action threshold, loss aversion amplifies negative signals by $1.7$), and fuses
+\begin{equation}
+s=\lambda\,s_{\mathrm{text}}+(1-\lambda)\,s_{\mathrm{mkt}},\qquad \lambda=0.75,
+\end{equation}
+to mimic an LLM's text-heavy reaction. It buys or sells when $|s|$ exceeds $\theta=0.15$, with confidence $\min(1,|s|/2\theta)$. Without the defense layer, $s_{\mathrm{mkt}}$ is only a crude read of the last return and drawdown. An LLM can replace the lexicon (Sec.~\ref{sec:defense}).

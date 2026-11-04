@@ -1,171 +1,387 @@
 # RobustHFT-AgentLab
 
-**A defensive, offline simulation framework for testing and improving LLM-based trading agents under subtle financial misinformation** — with time-series grounding, HFT-inspired microstructure features, an explicit risk-control layer, strict no-lookahead verification, and a placebo-controlled attack metric.
+**A defense layer against misinformation attacks on LLM-based trading agents, and an offline framework that measures it fairly.**
 
-Built as a 4–5 month B.Tech Project (BTP) on top of *AutoRedTrader: Autonomous Red Teaming of Trading Agents through Synthetic Misinformation Injection* (Liu et al., 2026, arXiv:2605.09185).
+An AI trading agent reads the news to decide Buy, Sell or Hold. An attacker who slips subtly edited news into what it reads can change its trades. RobustHFT-AgentLab checks the news against what the market's own prices say, and measures how much that protects the agent: with placebo controls, replayed attacks and paired statistics over 100 simulated markets.
 
-> **Safety boundary.** Everything here is a closed simulation. There is no broker connection, no live trading, no public dissemination. All generated misinformation is synthetic, stays inside the simulator, and every record carries `provenance="synthetic"` plus a safety label. Nothing in this repository is investment advice.
+B.Tech Project, Department of Computer Science and Engineering, Netaji Subhas University of Technology, New Delhi. Built on *AutoRedTrader* (Liu et al., 2026, arXiv:2605.09185).
+
+> **Safety boundary.** Everything here is a closed, offline simulation: no broker, no order routing, no live trading, nothing published. Generated misinformation is synthetic, is about a fictional company, never leaves the simulator, and every generated record carries `provenance="synthetic"` plus a safety label. Nothing here is investment advice.
+
+## Contents
+
+1. [Start here: set up on a new computer](#start-here-set-up-on-a-new-computer)
+2. [Live demo](#live-demo)
+3. [The project in plain words](#the-project-in-plain-words)
+4. [Running the experiments](#running-the-experiments)
+5. [Running with a local LLM](#running-with-a-local-llm)
+6. [Real prices (BTC-USD)](#real-prices-btc-usd)
+7. [The paper](#the-paper)
+8. [Experiment design](#experiment-design)
+9. [Repository layout](#repository-layout)
+10. [Development](#development)
+11. [Animated showcase](#animated-showcase)
+12. [Troubleshooting](#troubleshooting)
+13. [Citation](#citation)
 
 ---
 
-## What it does in one paragraph
+## Start here: set up on a new computer
 
-A **MisGen** red-team engine perturbs synthetic financial news through three sub-spaces — behavioural **bias** (agent context), **minor** semantic perturbations (8 types: flipping, sentiment, numerical, temporal, entity, concept, causal, other) and style **rewrite** (news / academic) — gated by similarity and detectability filters and steered by a Pólya-urn history-aware sampler with closed-loop feedback. A **POMDP trading agent** (Perception · Profile · Memory · Action) reads retrieved news and market data and decides Buy/Sell/Hold. Every run drives a **shadow clean agent and a treated agent in lockstep** over the same market path, so Attack Success Rate is a true paired measurement, and a **placebo arm** (meaning-preserving paraphrases) gives the noise floor. Defences are stacked: **temporal grounding** (30-day windows, historical analogs with a strict `e + H ≤ t` admissibility rule, text–market consistency score), **microstructure features** (spread proxy, Garman–Klass RV, order-flow imbalance, volume shock, Amihud illiquidity, range ratio), and a **risk layer** (confidence gate, hold-on-conflict, vol-targeted sizing, stop/take-profit, drawdown throttle). Everything is deterministic, CPU-only, and runs in mock mode without any API key.
-
-## Quick start (fresh folder → results in ~10 minutes)
+You need **Python 3.12 or newer** (`python3 --version`), **git**, and **make** (built into macOS and Linux; on Windows see the commands below). About 1 GB of disk for the virtual environment. No GPU, no API keys and no internet are needed after installing.
 
 ```bash
-# 1. virtual environment (macOS/Linux)
-python3 -m venv .venv && source .venv/bin/activate
-#    Windows (PowerShell):  python -m venv .venv ; .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-pip install -e .
-
-# 2. data, model, tests
-python scripts/generate_sample_data.py          # data/sample/{prices,news}.csv (synthetic, labelled clean)
-python scripts/train_detector.py                # outputs/models/detector.pkl  (the trained detectability proxy)
-python -m pytest tests/ -q                      # full test suite, ~40 s
-
-# 3. experiments
-python scripts/run_pipeline.py                  # 18 arms x 100 seeds (~20 min) -> outputs/pipeline/
-python scripts/run_ablation.py --group all      # attack / defense / retrieval / kappa -> outputs/ablation/
-python scripts/make_report_tables.py            # outputs/report.md + paper/tables/*.tex
-python scripts/make_paper_figures.py            # paper/figures/*.pdf + Table I + figure macros
-
-# 4. paper (optional; needs a LaTeX install)
-make paper
+git clone https://github.com/aryaman-aga/RobustHFT-AgentLab.git
+cd RobustHFT-AgentLab
+make install        # creates .venv and installs everything into it (nothing global), about 2 minutes
+make test           # about 140 tests, about a minute: all should pass
+make demo           # opens the live demo in your browser (Ctrl+C in the terminal stops it)
 ```
 
-Or simply `make all`. Every `make` target uses `.venv/bin/python`; nothing is installed globally.
+The repository is private: the owner has to add your GitHub account as a collaborator before `git clone` works. If `make install` says your Python is too old, install Python 3.12 or newer and run `make install PYTHON=python3.12`.
 
-### Expected console output (abridged)
+**Windows** (PowerShell, without make):
 
-```
-$ python scripts/train_detector.py
-saved outputs/models/detector.pkl
-train_acc=0.657  threshold=0.499  holdout_clean_fpr=0.100
-detection rate by perturbation type (minor / after news rewrite / after academic rewrite):
-  flipping   0.19 / 0.14 / 0.12
-  ...
-$ python scripts/run_pipeline.py
-INFO pipeline: config=configs/default.yaml seeds=100 agent=mock llm=mock misgen=mock
-INFO pipeline: SAFETY: offline simulation only; all generated text is synthetic and labelled.
-INFO pipeline: seed=42 clean__none              MER=0.000 lift=0.00 ASR=0.000 CR=+0.146 DD=-0.054
-INFO pipeline: seed=42 injected__none           MER=0.713 lift=1.45 ASR=0.417 CR=+0.171 DD=-0.043
-INFO pipeline: seed=42 placebo__none            MER=0.496 lift=1.01 ASR=0.250 CR=+0.076 DD=-0.054
-...
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m pip install -e .
+.venv\Scripts\python -m pytest tests -q
+.venv\Scripts\python scripts\demo_server.py
 ```
 
-The exact numbers are reproduced by `seed: 42` in `configs/default.yaml`; see `outputs/report.md` after a run.
+Everything else in this README uses `make`; each target is a one-line Python command in the `Makefile` that also runs as `.venv\Scripts\python scripts\<name>.py` on Windows.
+
+**What is already in the repository, and what is not.** The paper's tables, figures and numbers (`paper/`) and the showcase data (`frontend/data.js`) are committed, so the demo, the showcase and the paper work right after cloning. The raw experiment results (`outputs/`) are not committed: they take hours to recompute (see [Running the experiments](#running-the-experiments)).
+
+---
+
+## Live demo
+
+`make demo` starts a small local web server (`scripts/demo_server.py`, standard library only, reachable only from this computer) and opens **http://127.0.0.1:8765**. It is the quickest way to show what the project does.
+
+1. **Pick a market day:** rising, falling or flat. The page shows the last 60 days of prices and the *market evidence* the defense computes from prices up to that day only.
+2. **Type the news:** a genuine headline, which both agents read, and the attacker's fake version, which only the attacked agent reads.
+3. **Run.** Two pairs of agents decide on that day. Each pair is an attacked agent and an identical *clean twin* that reads only the genuine news; if the two decide differently, the fake news **flipped** the decision.
+   - *Without defense:* the agent reads the news and glances at the last price move.
+   - *With the defense layer:* the same agent, plus the market evidence and temporal grounding. When the news contradicts the market, the page shows **"Conflict spotted"** and how far grounding pulled the decision back toward the market.
+
+Built-in examples (click them at the top of the page):
+
+| Example | What happens | The point |
+|---|---|---|
+| Fake reversal against a rising market | Without defense Buy → Hold; with the defense Buy stays Buy, conflict spotted | The defense works because the attacker cannot change prices |
+| Fake news that agrees with the market | Only the undefended agent flips; the defended agent already follows the market | No conflict, nothing to spot, and little harm |
+| When the market gives no clear signal | Both agents flip | A limit: with neutral evidence there is nothing to check the news against |
+| Record high vs record low (local LLM) | Like the first example, with free wording | Needs the local LLM reader (below) |
+
+**Options:**
+- **Risk layer:** set it to *Hold on conflict* to see the backfire the paper reports (the attacker triggers the rule, so the defended agent flips too), and to *Shrink on conflict* to see the fix.
+- **Attacker's bias prompt:** overconfidence or loss aversion, as in the experiments.
+- **News reader:** the paper's agent reads news with a fixed finance word list. It counts "record" as positive and does not know "low", so "sales hit a record low" reads as good news. For free wording switch to the **local LLM** reader: run `make llm-setup llm-pull` once (about 5 GB download) and `make llm-up` before the demo, and `make llm-down` afterwards to free the memory.
+- **Write about Nordwind Systems.** The simulated market is the stock of a fictional company, *Nordwind Systems*, so headlines should be about it ("Nordwind Systems sales touch record low"); the LLM reader rates news about other companies as irrelevant.
+
+The demo runs the experiments' own code on one day of the simulated market. The only simplifications: every headline gets the same weight, and agents start with no position and no memory. The paper's numbers come from thousands of such decisions over 100 markets, not from one example.
+
+---
+
+## The project in plain words
+
+### The idea
+
+LLM trading agents trade on the news they read. Fake news can trick them, and simply detecting fake news is hard. The attacker can change what the agent *reads*, but not what the market *does*. So the defense checks every piece of news against the price evidence and trusts the news less when the two disagree. The second half of the project is measuring that fairly, because a naive measurement overstates how much of an attack is really the misinformation.
+
+### The pipeline
+
+```mermaid
+flowchart TD
+    M["Market<br/>prices + daily news"] --> A["Attacker (MisGen)<br/>edits news, adds bias"]
+    M --> C["Clean twin agent<br/>reads real news only"]
+    A --> T["Attacked agent<br/>reads real + fake news"]
+    T --> D["RobustHFT defense layer (same on both twins)<br/>price evidence, grounding, risk rules"]
+    C --> D
+    D --> F["Compare decisions<br/>different = a flip"]
+    F --> S["Fair scoring<br/>placebos, replays, 100 seeds"]
+    S --> P["Paper and figures<br/>every number generated"]
+    classDef attack fill:#FAECE7,stroke:#993C1D,color:#712B13
+    classDef defense fill:#E1F5EE,stroke:#0F6E56,color:#085041
+    class A attack
+    class D defense
+```
+
+1. **Market.** Each *seed* is one simulated market: 400 days of prices (bull, sideways and bear moods with changing volatility) and 5 news articles a day about a made-up company, *Nordwind Systems*. Good news tends to come before up-days (correlation 0.35), as with real news. The last 60 days are the test period. A second setting uses **real Bitcoin prices** (each seed is a different 400-day stretch of real history) with the same kind of made-up news.
+2. **The agent.** Every day it retrieves the 4 most relevant recent articles and rates each as positive or negative. It averages those ratings into a *news signal*, mixes it 75/25 with a quick look at prices, and trades when the signal is strong enough; otherwise it holds. The articles are rated by a finance word list (fast and transparent), or by a **real LLM running locally** (`qwen2.5:7b`, *reader mode*). In *decider mode* the LLM makes the whole Buy/Sell/Hold decision itself.
+3. **The attacker (MisGen, from AutoRedTrader).** Every day it makes subtly edited copies of the real articles: "rose" becomes "fell", a number changes, the cause is swapped, or the style is rewritten. It keeps only fakes that read like the original and pass a fake-news detector. It also whispers a *bias* to the agent ("be overconfident", "fear losses") and learns which tricks work.
+4. **The twins.** Two identical agents trade the same market. One reads real plus fake news; the *clean twin* reads only real news. A day on which they decide differently is a **flip**, and the share of flipped days is the **attack success rate (ASR)**.
+5. **The defense layer (the contribution).**
+   - **Price evidence:** what do prices say now (momentum, trend, volatility, trading-activity features)? Plus a history check: the 5 past periods most like today, and what happened next. Only periods whose outcome was already known may be used, so nothing peeks at the future.
+   - **Grounding:** news that disagrees with the price evidence is trusted less (its signal is pulled toward the evidence); news that agrees passes untouched.
+   - **Risk rules:** a confidence check, position sizing and stop-loss.
+6. **Fair scoring.** This is why the numbers can be trusted.
+   - **Placebo:** inject harmless paraphrases instead of fake news. Decisions still flip on about 21% of days just because the news pool changed, so we report **net ASR** = attack ASR − placebo ASR.
+   - **Frozen replay:** record one attack and replay exactly the same fake articles against every defense, so every defense faces an identical attack.
+   - **Statistics:** all variants share the same random numbers, results are averaged over 100 different markets, and a result counts only if its 95% confidence interval excludes zero and its multiple-testing-corrected p-value is below 0.05.
+   - **No-peeking tests:** change future prices or news, and check that earlier decisions stay bit-identical.
+7. **Paper.** Every number, table and figure in the paper is produced by a script from fixed seeds; nothing is typed by hand.
+
+### What we found so far (100 simulated markets)
+
+| Defense | Net ASR (flips caused by the misinformation) | Return in a clean market |
+|---|---|---|
+| None | 18.4% | 6.6% |
+| **Temporal grounding** | **7.4%** (−11.0 points, 95% CI [9.1, 12.9]) | 2.9% |
+| Grounding + risk layer | 9.3% | 2.2% |
+| Ignore the news entirely | 0% (cannot be attacked) | −0.3% |
+| Fake-news detector filter, 10% / 25% false alarms | 16.5% / 15.5% | 6.0% / 5.9% |
+| Median of the article ratings | 12.4% | 6.7% |
+
+- Without a defense the attack flips 39% of days, but 21 points of that also happen with harmless paraphrases. The misinformation itself causes about 18%.
+- Grounding cuts that by 60% and beats every standard defense by 5–9 points (all statistically clear). It costs about 3.6 points of return in a clean market.
+- The detector filter caught **0%** of the attacker's fakes at its normal setting, because the attacker already screens its fakes against that detector. At a stricter setting it caught 13% and threw away 25% of the real news.
+- Microstructure features add nothing detectable on synthetic data, and the hold-on-conflict rule backfires (+1.9 points): the attacker creates the conflict that triggers it. **Shrinking** the trade by the consistency score instead of holding removes the penalty (net ASR 9.3% → 7.5%).
+- **The result generalizes.** Grounding's gain holds in every setting we tried:
+
+  | Setting | Markets | Net ASR: none → grounded | Reduction (95% CI) |
+  |---|---|---|---|
+  | Local LLM (qwen2.5:7b) rates the news | 30 | 14.6% → 7.4% | 7.2 points [3.8, 10.7] |
+  | Real BTC-USD prices (2014–2026) | 67 | 16.1% → 7.8% | 8.3 points [6.2, 10.2] |
+  | Attacker aligns its fakes with the market | 100 | 19.0% → 7.9% | 11.2 points [8.9, 13.4] |
+  | Fake news also moves prices (γ = 2, frozen) | 100 | 17.0% → 6.5% | 10.5 points [8.8, 12.1] |
+
+- **Open problem.** An attacker that picks, among its fakes, the one most at odds with the market raises net ASR against the full layer by 5.6 points [4.1, 7.2].
+- **Not run at scale:** the LLM-decider mode (the LLM picks Buy/Sell/Hold itself), which needs about 20 hours for 10 markets on a laptop (command under [Running with a local LLM](#running-with-a-local-llm)), and the conflict-seeking attacker against no defense and grounding alone.
+
+---
+
+## Running the experiments
+
+Start with a smoke run (two simulated markets, about a minute):
+
+```bash
+.venv/bin/python scripts/run_pipeline.py --seeds 2 --out outputs/smoke   # one log line per arm, e.g.
+# INFO pipeline: seed=42 injected__none   MER=0.692 lift=1.41 ASR=0.417 CR=+0.171 DD=-0.043
+```
+
+The full study, which reproduces every number in the paper (times on an Apple M2 laptop, one CPU core):
+
+```bash
+make train-detector     # outputs/models/detector.pkl (the detectability proxy), seconds
+make pipeline           # 18 arms x 100 seeds, about 20 min -> outputs/pipeline/
+make ablation           # every ablation group, about 5 h  -> outputs/ablation/<group>/
+make price-impact       # fake news that also moves prices, about 1.5 h -> outputs/price_impact/
+make report             # outputs/report.md, paper/tables/*.tex, paper/figures/*.pdf
+make frontend           # frontend/data.js for the animated showcase
+```
+
+- `make all` runs the whole chain. Run long jobs one at a time on a laptop.
+- `--seeds 30` on any run script gives a fast but meaningful result, and `--seeds 2` a smoke test.
+- **Results are reproducible:** the same config and seed give bit-identical metrics on every run.
+- **Order matters.** `make report` and `make frontend` refuse to run until `outputs/pipeline/` exists, because they would otherwise replace the committed paper tables and showcase data with empty ones.
+
+---
+
+## Running with a local LLM
+
+The LLM runs on this machine through [Ollama](https://ollama.com), installed **inside `.venv`**: binary, models and server state all live under `.venv/ollama/`. Nothing is installed globally and nothing touches `~/.ollama`.
+
+```bash
+make llm-setup          # pinned Ollama release, checksum-verified -> .venv/bin/ollama
+make llm-up             # server on 127.0.0.1:11434 (pid and log in .venv/ollama/)
+make llm-pull           # qwen2.5:7b (4.7 GB) and llama3.2:3b (2.0 GB) -> .venv/ollama/models
+
+# reader mode: the LLM rates each article; the defense layer runs exactly as published
+python scripts/run_pipeline.py --seeds 30 --out outputs/llm/reader_qwen7b \
+    --set llm.provider=ollama --set llm.model=qwen2.5:7b --set agent.text_scorer=llm
+
+# decider mode: the LLM picks Buy/Sell/Hold, with the market evidence in its prompt
+python scripts/run_pipeline.py --seeds 10 --out outputs/llm/decider_qwen7b \
+    --arms clean,injected,placebo,frozen --levels none,grounded,grounded_risk \
+    --set llm.provider=ollama --set llm.model=qwen2.5:7b --set agent.mode=llm \
+    --set experiment.counterfactual_asr=false
+
+make llm-down           # stop the server
+```
+
+- **Local only.** The client accepts loopback hosts only, so prompts (which contain the synthetic misinformation) never leave the machine.
+- **Reproducible.** Decoding is greedy with a fixed seed, answers are constrained to a JSON schema, and every answer is cached in `outputs/llm_cache/`, keyed by everything that can change it. Re-runs are free and exact.
+- **Loud failures.** A stopped server, a model that has not been pulled, or an unknown provider raises an error instead of silently degrading to Hold. Unreadable answers are counted; each run writes `llm_stats.json` with the model digest, cache hits and parse failures.
+- **Speed** on an Apple M2 with 16 GB: about 2 s per article in reader mode (30 markets in about 8 hours) and 10-15 s per decision in decider mode (10 markets in about 20 hours, so it has not been run at scale). Run one LLM experiment at a time, with nothing else heavy alongside.
+- **API models** (`anthropic` or OpenAI-compatible) work the same way, with keys only in `.env` (see `.env.example`).
+
+---
+
+## Real prices (BTC-USD)
+
+```bash
+make real-data          # yfinance (in .venv), once -> data/real/btc_usd.csv (git-ignored)
+python scripts/run_pipeline.py --seeds 67 --out outputs/real_btc \
+    --set data.source=real --set grounding.analog_scale=auto
+```
+
+- Each seed uses its own 400-day window of real history. BTC-USD from 2014 to 2026 gives 67 windows whose 60-day test periods never overlap.
+- The news is template news about the fictional company, generated per seed and tied to the real next-day returns, so no text about a real asset is ever generated.
+- `grounding.analog_scale: auto` rescales the history check to the asset's typical move, using prices from before the test period only.
+- yfinance is the project's only network path for data, and it is used once to download prices. Everything downstream reads the saved CSV offline.
+
+---
+
+## The paper
+
+*RobustHFT-AgentLab: A Defense Layer Against Misinformation Attacks on LLM-Based Trading Agents.* One text, two builds (details in `paper/README.md`):
+
+```bash
+make paper              # paper/main.pdf: IEEE format, with author names (needs tectonic or a TeX installation)
+make paper-aaai         # paper/aaai/draft.pdf: anonymous AAAI-27 version, 7 pages + appendix
+make paper-aaai-zip     # paper/aaai/aaai27_source.zip for Overleaf, plus the OpenReview form text
+make supplementary      # paper/aaai/aaai27_supplementary.zip: the code with author names removed
+```
+
+- **Edit the text in `paper/sections/*.tex`**, shared by both builds.
+- Never edit `paper/tables/` or `paper/figures/` by hand: every number in the text is a macro generated from the results.
+- **Target venue:** the AAAI-27 workshop on Foundation Models and Generative AI for Finance (FinFM). Submission is on OpenReview, deadline 20 Nov 2026, 23:59 AoE. The submitted PDF must be compiled with pdfLaTeX, for example by uploading the Overleaf zip.
+
+---
+
+## Experiment design
+
+**Arms.** Each arm is a paired run: an attacked agent against a clean twin on the same market.
+
+| Arm | What the attacked agent reads | Context |
+|---|---|---|
+| `clean__*` | real news only | unbiased |
+| `placebo__*` | real news + harmless paraphrases of every article | unbiased |
+| `injected__*` | real news + MisGen fakes, **adaptive** (the attacker learns against this agent) | attacker's bias prompt |
+| `frozen__*` | real news + the attack recorded against the undefended agent, **replayed verbatim** | recorded bias prompts |
+| `placebo_matched__*` | real news + paraphrases of only the articles the recorded attack edited | unbiased |
+| `placebo_bias__*` | as `placebo_matched__*` | recorded bias prompts |
+
+**Defense levels:**
+- `none`: a text-heavy agent with no grounding.
+- `grounded`: temporal grounding with microstructure features.
+- `grounded_risk`: grounding plus the risk layer.
+
+**Placebo ladder.** The four controls add the attack's ingredients one at a time, so consecutive differences split ASR into four parts:
+- retrieval noise;
+- article count;
+- bias prompts;
+- the misinformation's content, i.e. ASR(`frozen`) − ASR(`placebo_bias`).
+
+**Common random numbers.** The attacker is seeded by injection type, never by arm name, and draws from streams keyed by (day, article). Every arm of a seed therefore shares its random numbers. `frozen__none` must reproduce `injected__none` exactly; the pipeline checks this on every seed.
+
+**One-step counterfactual ASR** (`ASR_cf`). Each day a throw-away agent decides with the clean twin's memory and portfolio but the attacked pool and bias. This removes flips caused by drift between the twins. It reads copies only, so it changes no other result (tested).
+
+**Statistics.** Claims are paired per-seed differences, each with:
+- a 95% percentile-bootstrap CI;
+- a sign-flip permutation p-value;
+- Holm correction within each family of related comparisons.
+
+New comparisons always go into new families, so existing p-values never move (`scripts/make_report_tables.py`).
+
+**Metrics:**
+- MER (share of retrieved documents that are fake) and MER lift;
+- ASR, net ASR, active ASR and counterfactual ASR;
+- **position gap**: how far the attack moved the position, not just the decision label;
+- clean-market return, attacked-vs-twin return gap, drawdown, Sharpe-like ratio;
+- detector recall and real-news loss, for the filter baseline;
+- LLM parse-failure rate.
+
+**Ablation groups** (`configs/ablation.yaml`, `make ablation` or `--group <name>`):
+
+| Group | Question | Variants |
+|---|---|---|
+| `attack` | Which attack components matter? | full; without filtering, feedback, bias, minor edits or rewriting |
+| `defense` | Which defense components matter? | none, price-only grounding, + microstructure, risk only, full, without hold-on-conflict |
+| `retrieval` | Is net ASR an artifact of top-k? | k = 2, 4, 8 |
+| `grounding_strength` | How strong should grounding be? | κ = 0.3, 0.7, 1.0 |
+| `baselines` | Does grounding beat standard defenses? | text-free agent, detector filter at 10% and 25% false alarms, median and trimmed-mean pooling |
+| `aware_attack` | What if the attacker knows the defense? | evidence-aligned and conflict-seeking attackers against none, grounding and the full layer |
+| `conflict_handling` | Can the hold-on-conflict backfire be fixed? | hold, shrink, no rule; against the standard and the conflict-seeking attacker |
+
+**Price impact** (`make price-impact`). The recorded attack also moves the shared price path, by γ daily standard deviations per unit of sentiment shift (γ = 0, 1, 2). Both twins trade the moved prices; only the attacked agent reads the fake text.
+
+**Replications.** The headline comparisons are repeated with the local-LLM reader and real BTC-USD prices (and with the LLM decider once its run exists). Each is listed in `REPLICATIONS` in `scripts/make_report_tables.py` and has its own families.
+
+---
 
 ## Repository layout
 
 ```
-configs/            default.yaml (all knobs), ablation.yaml (override matrix)
+configs/            default.yaml (every knob), ablation.yaml (ablation groups)
 src/rhal/           the package
-  lexicon.py          single source of truth: finance polarity words, antonyms, entities, causes
-  config.py           pydantic Config + dotted overrides; LLM keys only from .env
-  seeding.py          per-component child seeds (paired comparisons stay paired)
+  config.py           pydantic Config; unknown keys are an error; LLM settings only from .env / --set
+  seeding.py          keyed random streams: paired comparisons stay paired
+  lexicon.py          single source of finance vocabulary (generator, scorer, operators, detector)
   schemas.py          NewsItem (mandatory provenance), Decision, MarketEvidence, BiasConfig
-  data/               synthetic OHLCV+news generator, CSV/yfinance loaders, validators
-  features/           core (Eq.19) + microstructure proxies + trailing z-scores (no lookahead)
-  grounding/          analog retrieval (e+H<=t), evidence builder, consistency score
-  memory/             NewsPool (date-gated), TF-IDF/BM25/embeddings retrieval
-  misgen/             operators, Polya-urn sampler, detector (trained), filters, engine (Alg. 1)
-  agent/              sentiment, perception, profile, memory, policies (rule/mock/LLM), risk, agent
-  llm/                provider abstraction with disk cache; mock, Anthropic, OpenAI-compatible
-  backtest/           accounting engine with fees/slippage, next-open execution
-  evaluation/         paired Simulation, metrics (MER, lift, ASR, net ASR), report/plots
-scripts/            generate_sample_data, train_detector, run_pipeline, run_ablation, make_report_tables
-tests/              pytest suite incl. future-mutation no-lookahead tests and accounting invariants
-docs/               ARCHITECTURE.md (Mermaid diagrams, data flow, class design), ROADMAP.md (week-wise plan),
-                    GLOSSARY.md (terminology)
-paper/              conference manuscript (see paper/README.md)
-  main.tex            manuscript; every number comes from tables/numbers.tex
-  tables/, figures/   GENERATED by scripts/make_report_tables.py -- never hand-edit
-reports/midterm/    mid-term BTP report (.md, .tex, .pdf)
-frontend/           animated showcase (index.html + app.js + styles.css; data.js is GENERATED by `make frontend`)
-data/sample/        synthetic sample CSVs for data.source=csv (written by `make data`, git-ignored)
-outputs/            all run artifacts (git-ignored; regenerate with `make all`)
+  data/               synthetic prices + template news, real-price loader and validation
+  features/           trailing features and microstructure proxies (no lookahead)
+  grounding/          historical analogs (e + H <= t) and the market-evidence model
+  memory/             date-gated news pool, TF-IDF/BM25 retrieval, optional detector filter
+  misgen/             attack operators, Polya-urn sampler, detector, filters, engine (incl. defense-aware attacker)
+  agent/              sentiment, perception, profile, memory, policies, LLM reader, risk layer
+  llm/                provider clients with a disk cache: mock, Ollama (local), Anthropic, OpenAI-compatible
+  backtest/           accounting with fees, slippage and next-open execution
+  evaluation/         paired Simulation, metrics, statistics, price impact, report helpers
+  demo.py             the live demo: one market day, the agent with and without the defense layer
+scripts/            run_pipeline, run_ablation, run_price_impact, make_report_tables, make_paper_figures,
+                    export_frontend_data, train_detector, generate_sample_data, fetch_real_prices, setup_ollama.sh,
+                    demo_server (make demo), export_openreview, make_supplement
+tests/              pytest suite: no-lookahead mutation tests, determinism, CRN, controls, LLM client, baselines, demo
+paper/              the manuscript (paper/README.md): sections/ (all prose), main.tex (IEEE), aaai/ (AAAI-27);
+                    tables/ and figures/*.pdf are GENERATED
+docs/               ARCHITECTURE.md (diagrams, class design), GLOSSARY.md (terms), ROADMAP.md (status and plan)
+reports/midterm/    mid-term BTP report
+frontend/           demo.html + demo.js (live demo) and index.html (animated showcase; data.js is GENERATED)
+data/               sample/ and real/ CSVs (git-ignored; written by `make data` and `make real-data`)
+outputs/            every run artifact (git-ignored; regenerate with the make targets)
 ```
 
-Secrets go in `.env` (git-ignored); `.env.example` lists the variables.
+---
 
-## Experiment design
-
-| Arm | Pool | Context | Defence |
-|---|---|---|---|
-| `clean__*` | clean only | unbiased | per level |
-| `placebo__*` | clean + meaning-preserving paraphrases | unbiased | per level |
-| `injected__*` | clean + MisGen misinformation, **adaptive** (feedback loop runs against this agent) | attacker bias prompt | per level |
-| `frozen__*` | clean + the attack recorded against the undefended agent, **replayed verbatim** | recorded bias prompts | per level |
-| `placebo_matched__*` | clean + paraphrases of only the items the recorded attack injected (same count) | unbiased | per level |
-| `placebo_bias__*` | as `placebo_matched__*` | recorded bias prompts | per level |
-
-Defence levels: `none` (text-heavy ungrounded agent), `grounded` (temporal grounding + micro features), `grounded_risk` (+ risk layer). Each arm is a paired run: the treated agent's ASR is measured against a shadow clean agent that saw the same market on the same day.
-
-**Common random numbers.** MisGen is seeded by (seed, injection type) — never by arm name — and draws from streams keyed by (day, item), so every arm of a seed shares the attacker's random numbers and renaming an arm cannot change a result. The `frozen__*` arms go further: every defence faces bit-identical documents, so their differences are caused by the defence alone (`frozen__none` reproduces `injected__none` exactly; the pipeline checks this on every seed).
-
-**Statistics.** 100 seeds by default (`experiment.n_seeds`; `--seeds 30` for quick runs). Claims are tested as paired per-seed differences: mean, 95% percentile-bootstrap CI, two-sided sign-flip permutation p-value, Holm correction within each family (`src/rhal/evaluation/stats.py`; comparisons are listed in `scripts/make_report_tables.py`). Results land in `*_stats.csv`, `outputs/report.md` and `paper/tables/stats_*.tex`.
-
-**Matched controls.** The classic placebo paraphrases *every* item and carries no bias prompt, whereas the attack injects only accepted candidates and adds bias prompts. The matched placebos, built from the same tape, split ASR into pool noise, count, bias and meaning: meaning = ASR(`frozen`) − ASR(`placebo_bias`) (`ASR_net_matched`). The matched columns are filled only for arms that face that tape (`frozen__*` and `injected__none`); an adaptive attack on a defended agent injects other items and bias types, so its matched columns are empty. Every placebo variant uses the same paraphrase for each (day, item).
-
-**One-step counterfactual ASR** (`ASR_cf`, `experiment.counterfactual_asr`). Once the treated agent's portfolio and memory drift from the shadow's, later "flips" can come from that drift rather than from the text. Each day a throw-away agent decides with the shadow's memory and portfolio but the treated pool and bias, and is compared with the shadow. It reads only copies, so it changes no other result (tested).
-
-**Metrics.** MER and ASR follow the paper (Eqs. 8–9). We add **MER lift** (MER ÷ synthetic share of the visible pool) and **net ASR** (ASR − placebo ASR), because a doubled retrieval pool alone reshuffles top-k and flips near-threshold decisions; net ASR isolates the effect of *meaning*. Also: signal deviation, ASR|exposed, exposure and flips by perturbation type and by bias, CR, max drawdown, Sharpe-like, turnover, risk-override counts.
-
-**Ablations** (`configs/ablation.yaml`): attack-side (w/o filtering / feedback / bias / minor / rewrite, as in the paper's Table 2), defence-side (none, grounding only, grounding+micro, risk only, full, w/o hold-on-conflict), retrieval breadth k∈{2,4,8}, grounding strength κ∈{0.3,0.7,1.0}.
-
-## Animated showcase (frontend)
-
-`frontend/index.html` is a self-contained, animated walkthrough of the project, built for demos and the viva. It has no external libraries or fonts, works offline, and supports light/dark themes and reduced motion.
-
-* **How it works:** an animated pipeline of one trading day: clean news, the MisGen attacker, retrieval, the agent, grounding, the risk layer, the decision, and the comparison with the clean twin.
-* **With vs without:** two synchronised panels replay the same 60 trading days with play/pause, scrubbing and speed controls. Four comparisons: the attack itself, the placebo check, temporal grounding and the risk layer. Each shows decisions popping onto the price chart, ⚡ flips against the clean twin, the text/market/final signal needles, the day's retrieved news as CLEAN / SYNTHETIC / PARAPHRASE cards, and risk-layer vetoes.
-* **Results:** animated decomposition of naive ASR (pool noise, count, bias prompts, meaning), net ASR by defence with 95% CIs, and what works and what doesn't.
+## Development
 
 ```bash
-make frontend                                   # writes frontend/data.js from a seed-42 replay + the latest outputs/
-python -m http.server 8765 --directory frontend # then open http://localhost:8765 (or open index.html directly)
+make test               # full suite;  make test-fast stops at the first failure
+make lint               # ruff format --check + ruff check (config in pyproject.toml)
+make format             # ruff format + safe autofixes
 ```
 
-Every number on the page comes from `frontend/data.js`; nothing is hand-typed. For safety the page shows only *labels* of generated documents (edit type, rewrite style), never their text.
+- **Determinism:** two runs with the same config and seed give identical metrics. Randomness goes only through `rhal.seeding.rng`.
+- **No lookahead:** decisions at day t may use only rows up to t. Tests mutate future prices and future article text, and require earlier decisions to stay bit-identical.
+- **Generated artifacts:** paper tables, figures and macros, and `frontend/data.js`, are written by scripts. Never edit them by hand.
+- **Conventions for contributors and AI assistants:** see `CLAUDE.md`.
 
-## Agent modes
+---
 
-| `agent.mode` | What decides | Needs |
-|---|---|---|
-| `rule` | market evidence only (technical baseline) | nothing |
-| `mock` (default) | deterministic surrogate LLM: lexicon sentiment of retrieved docs, bias operators as explicit parameter shifts, grounding shrinkage `s_g = s − κ(1−c)(s − s_mkt)` | nothing |
-| `llm` | real LLM via `.env` (`RHAL_LLM_PROVIDER=anthropic|openai`), prompt = Perception+Profile+Memory+Evidence+docs, JSON parsed, disk-cached for reproducibility | API key |
+## Animated showcase
 
-Bias prompts in LLM mode are the paper's Appendix E.2 texts verbatim; in mock mode they map to `BiasConfig` (overconfidence → lower action threshold; loss aversion → ×1.7 downside weight; anchoring → 0.5 blend with yesterday's signal; herding → pull toward recent majority action; confirmation → up-weight agreeing docs).
+`frontend/index.html` is a self-contained, animated walkthrough for demos and the viva. It works offline, uses no external libraries or fonts, and supports light and dark themes and reduced motion. It has three parts:
+- an animated trading day;
+- two synchronised "with vs without" panels replaying the same 60 days (attack, placebo, grounding, risk layer);
+- the results, with confidence intervals.
 
-## Optional extras
+Open it at **http://127.0.0.1:8765/index.html** while `make demo` runs, or open `frontend/index.html` directly from disk. `make frontend` regenerates its data (`frontend/data.js`) from a seed-42 replay and the latest results in `outputs/`.
 
-```bash
-pip install -r requirements-optional.txt     # anthropic, openai, yfinance
-cp .env.example .env                          # then set RHAL_LLM_PROVIDER and a key
-python scripts/run_pipeline.py --set agent.mode=llm --seeds 1
-```
-`retrieval.method: embed` uses sentence-transformers if installed, else silently falls back to TF-IDF.
-Real historical prices can be loaded with `data.source: csv` (any OHLCV CSV with `date,open,high,low,close,volume`) or via `rhal.data.loaders.download_yfinance`.
+The page shows only *labels* of generated documents (edit type, rewrite style), never their text.
+
+---
 
 ## Troubleshooting
 
-* **`ModuleNotFoundError: rhal`** → `pip install -e .` inside the venv, or run scripts from the repo root (they add `src/` to `sys.path`).
-* **`not enough history`** → `data.n_days − data.eval_days` must be ≥ 100 (warm-up for 60-day trailing normalisation + 30-day windows).
-* **Slow first test run** → the session-scoped fixtures train a detector once (~3 s); subsequent tests are fast.
-* **Different numbers than the README** → check `seed`, `configs/default.yaml`, and that `outputs/models/detector.pkl` was trained with the same seed (delete it to retrain).
-* **matplotlib display errors** → plots use the Agg backend; no display is needed.
-* **pandas ≥ 3 warnings** → the code is written for pandas 3 (copy-on-write); older pandas 2.x also works.
-* **LLM mode returns Hold everywhere** → the provider's output could not be parsed as JSON; inspect `outputs/llm_cache/*.json`.
+- **`make install` fails with "No matching distribution" for numpy or scipy**: your Python is older than 3.12. Install Python 3.12 or newer, delete `.venv`, and run `make install` again.
+- **The demo page says the server is not running**: start it with `make demo` and use the address it prints (opening `frontend/demo.html` from disk cannot run the agent). **Port 8765 is busy**: `.venv/bin/python scripts/demo_server.py --port 8766`.
+- **The demo's LLM reader says it cannot reach Ollama**: run `make llm-up` (after `make llm-setup llm-pull` once), or switch the reader back to the word list.
+- **`ModuleNotFoundError: rhal`**: run `pip install -e .` inside the venv, or run scripts from the repo root (they add `src/` to the path).
+- **`not enough history`**: `data.n_days − data.eval_days` must be at least 100.
+- **A config key is rejected**: config sections forbid unknown keys, so check the spelling against `configs/default.yaml`.
+- **`cannot reach Ollama`**: run `make llm-up`. **`model ... is not available`**: run `make llm-pull LLM_MODELS=<tag>`.
+- **Slow LLM runs**: close memory-hungry apps (16 GB machines swap with a 7B model loaded), and run one LLM experiment at a time.
+- **`retrieval.method=embed` fails**: it needs `pip install -e '.[embed]'` and downloads a model from Hugging Face. It is not part of the offline setup.
+- **Numbers differ from the paper**: check `seed`, `configs/default.yaml`, and that `outputs/models/detector.pkl` was trained with the same seed (delete it to retrain).
 
-## Reading the code
+---
 
-Start with `docs/ARCHITECTURE.md`, then `src/rhal/evaluation/experiment.py::Simulation.run` (the whole loop is ~60 lines), then `misgen/engine.py` and `agent/policy.py`.
+## Citation
 
-## Citation of the base paper
+Base paper: Liu, Z., Yu, Y., Cao, Y., et al. *AutoRedTrader: Autonomous Red Teaming of Trading Agents through Synthetic Misinformation Injection.* arXiv:2605.09185, 2026.
 
-Liu, Z., Yu, Y., Cao, Y., et al. *AutoRedTrader: Autonomous Red Teaming of Trading Agents through Synthetic Misinformation Injection.* arXiv:2605.09185, 2026.
+This project: Agarwal, A., Habib, A., Kumar, A. *RobustHFT-AgentLab: A Defense Layer Against Misinformation Attacks on LLM-Based Trading Agents.* B.Tech Project, NSUT, 2026 (manuscript in `paper/`).

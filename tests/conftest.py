@@ -10,7 +10,10 @@ from rhal.evaluation.experiment import Dataset, prepare_dataset, train_detector
 @pytest.fixture(scope="session")
 def small_cfg() -> Config:
     """Fast config: 180 days history, 12 eval days, 3 news/day."""
-    return load_config("configs/default.yaml", {"data.n_days": 180, "data.eval_days": 12, "data.news_per_day": 3, "experiment.n_seeds": 1})
+    return load_config(
+        "configs/default.yaml",
+        {"data.n_days": 180, "data.eval_days": 12, "data.news_per_day": 3, "experiment.n_seeds": 1},
+    )
 
 
 @pytest.fixture(scope="session")

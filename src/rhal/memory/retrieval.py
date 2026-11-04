@@ -3,11 +3,13 @@
 Retrieval is date-gated through :class:`NewsPool.visible` so the agent can
 never read tomorrow's news. Scores are multiplied by ``decay^age``.
 """
+
 from __future__ import annotations
 
 import math
 import re
 from collections import Counter
+from typing import Callable
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -23,8 +25,21 @@ def _tokens(s: str) -> list[str]:
 
 
 class Retriever:
-    def __init__(self, method: str = "tfidf", top_k: int = 4, recency_days: int = 3, recency_decay: float = 0.5, background: list[str] | None = None):
+    def __init__(
+        self,
+        method: str = "tfidf",
+        top_k: int = 4,
+        recency_days: int = 3,
+        recency_decay: float = 0.5,
+        background: list[str] | None = None,
+        doc_filter: Callable[[NewsItem], bool] | None = None,
+    ):
         self.method = method
+        # Detection baseline: visible documents the filter rejects are dropped BEFORE the top-k cut,
+        # so the agent still reads k documents. last_visible/last_dropped record provenance for metrics.
+        self.doc_filter = doc_filter
+        self.last_visible: list[str] = []
+        self.last_dropped: list[str] = []
         self.top_k = top_k
         self.recency_days = recency_days
         self.recency_decay = recency_decay
@@ -37,12 +52,16 @@ class Retriever:
         self._tfidf = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True)
         self._tfidf.fit(background if background else ["placeholder"])
         if method == "embed":
-            try:  # optional
+            # Optional and NOT offline: the first use downloads all-MiniLM-L6-v2 from Hugging Face.
+            # Fail loudly instead of silently falling back to TF-IDF, which would make an "embed"
+            # run identical to a TF-IDF run without any warning.
+            try:
                 from sentence_transformers import SentenceTransformer  # type: ignore
-
-                self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
-            except Exception:  # pragma: no cover
-                self.method = "tfidf"
+            except ImportError as e:  # pragma: no cover - optional dependency
+                raise ImportError(
+                    "retrieval.method=embed needs sentence-transformers (pip install -e '.[embed]')"
+                ) from e
+            self._embedder = SentenceTransformer("all-MiniLM-L6-v2")  # pragma: no cover
 
     # -- scoring -----------------------------------------------------------
     def _scores(self, query: str, docs: list[str]) -> np.ndarray:
@@ -82,14 +101,21 @@ class Retriever:
         return out
 
     # -- public ------------------------------------------------------------
-    def retrieve(self, pool: NewsPool, query: str, date: str, all_dates: list[str], top_k: int | None = None) -> list[RetrievedDoc]:
+    def retrieve(
+        self, pool: NewsPool, query: str, date: str, all_dates: list[str], top_k: int | None = None
+    ) -> list[RetrievedDoc]:
         k = top_k or self.top_k
         vis = pool.visible(date, self.recency_days, all_dates)
+        if self.doc_filter is not None:
+            keep = [self.doc_filter(it) for it, _ in vis]
+            self.last_visible = [it.provenance for it, _ in vis]
+            self.last_dropped = [it.provenance for (it, _), k in zip(vis, keep) if not k]
+            vis = [v for v, k in zip(vis, keep) if k]
         if not vis:
             return []
         items = [v[0] for v in vis]
         ages = np.array([v[1] for v in vis])
         s = self._scores(query, [it.text for it in items])
-        s = s * (self.recency_decay ** ages)
+        s = s * (self.recency_decay**ages)
         order = np.argsort(-s, kind="stable")[:k]
         return [RetrievedDoc(item=items[i], score=float(s[i]), age_days=int(ages[i])) for i in order]

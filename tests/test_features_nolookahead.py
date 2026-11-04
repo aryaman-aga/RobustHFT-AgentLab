@@ -1,4 +1,5 @@
 """The flagship test: mutate the FUTURE and assert the PAST is byte-identical."""
+
 import numpy as np
 
 from rhal.features import build_feature_frame
@@ -23,7 +24,9 @@ def test_features_do_not_use_future(synth):
     a, b = f1.loc[: cut - 1, cols].to_numpy(float), f2.loc[: cut - 1, cols].to_numpy(float)
     assert np.array_equal(np.nan_to_num(a, nan=-999), np.nan_to_num(b, nan=-999))
     # and the future rows DO differ (the mutation reached the features)
-    assert not np.allclose(np.nan_to_num(f1.loc[cut + 25 :, cols].to_numpy(float)), np.nan_to_num(f2.loc[cut + 25 :, cols].to_numpy(float)))
+    assert not np.allclose(
+        np.nan_to_num(f1.loc[cut + 25 :, cols].to_numpy(float)), np.nan_to_num(f2.loc[cut + 25 :, cols].to_numpy(float))
+    )
 
 
 def test_no_full_sample_normalisation(synth):
@@ -52,7 +55,10 @@ def test_evidence_and_market_signal_do_not_use_future(synth):
 
 
 def test_market_signal_bounded_and_monotone():
-    z = {f"z_{k}": 0.0 for k in ["mom_5", "trend_div", "mom_20", "anomaly", "ofi_proxy", "volume_shock", "spread_proxy", "rv_gk"]}
+    z = {
+        f"z_{k}": 0.0
+        for k in ["mom_5", "trend_div", "mom_20", "anomaly", "ofi_proxy", "volume_shock", "spread_proxy", "rv_gk"]
+    }
     assert market_signal(z) == 0.0
     up = dict(z, z_mom_5=2.0, z_trend_div=2.0)
     dn = dict(z, z_mom_5=-2.0, z_trend_div=-2.0)

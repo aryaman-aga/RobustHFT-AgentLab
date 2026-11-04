@@ -5,6 +5,7 @@ fully observed by t. Concretely a candidate window ending at index e with
 outcome horizon H is admissible iff  e + H <= t.  This is stricter than the
 common (and leaky) practice of only requiring e < t.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

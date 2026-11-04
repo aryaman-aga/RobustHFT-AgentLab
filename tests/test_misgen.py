@@ -1,8 +1,17 @@
 import numpy as np
 
 from rhal.agent.sentiment import score_sentiment
-from rhal.misgen import BIAS_TYPES, MINOR_TYPES, REWRITE_TYPES, MisGenEngine, apply_minor, apply_placebo, apply_rewrite, bias_config
-from rhal.misgen.detector import DetectabilityModel, detect_features, FEATURE_NAMES
+from rhal.misgen import (
+    BIAS_TYPES,
+    MINOR_TYPES,
+    REWRITE_TYPES,
+    MisGenEngine,
+    apply_minor,
+    apply_placebo,
+    apply_rewrite,
+    bias_config,
+)
+from rhal.misgen.detector import FEATURE_NAMES, DetectabilityModel, detect_features
 from rhal.misgen.filters import SimilarityEvaluator
 from rhal.schemas import NewsItem
 from rhal.seeding import rng
@@ -61,7 +70,9 @@ def test_detector_features_and_training(synth):
     x = detect_features(SRC)
     assert x.shape == (len(FEATURE_NAMES),)
     texts = synth["news"]["text"].tolist()
-    pert = [apply_minor(t, "flipping", rng(10, i)) for i, t in enumerate(texts[:100])] + [apply_minor(t, "causal", rng(11, i)) for i, t in enumerate(texts[:100])]
+    pert = [apply_minor(t, "flipping", rng(10, i)) for i, t in enumerate(texts[:100])] + [
+        apply_minor(t, "causal", rng(11, i)) for i, t in enumerate(texts[:100])
+    ]
     det = DetectabilityModel().fit(texts, pert, target_fpr=0.1, seed=0)
     assert 0 < det.threshold < 1
     assert abs(det.meta["holdout_clean_fpr_at_threshold"] - 0.1) < 0.06

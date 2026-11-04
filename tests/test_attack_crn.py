@@ -4,6 +4,7 @@ Before this fix MisGen was seeded by the arm *name*, so three arms with identica
 configs (injected__grounded_risk, injected__full_defense, injected__kappa_0.7)
 reported ASR 25.3 / 22.7 / 31.3 -- attack noise as large as the defence effects.
 """
+
 import pytest
 
 from rhal.evaluation.experiment import RunSpec, Simulation
@@ -36,8 +37,14 @@ def test_frozen_arms_face_identical_attack(small_cfg, small_dataset, detector):
     g = sim.run(RunSpec("frozen__grounded", "replay", True, False, True), tape=tape)
     gr = sim.run(RunSpec("frozen__grounded_risk", "replay", True, True, True), tape=tape)
     # same pool contents and same bias context every day, whatever the defence did
-    assert [s["visible_synthetic_frac"] for s in g.treated_steps] == [s["visible_synthetic_frac"] for s in gr.treated_steps]
-    assert [s["bias"] for s in g.treated_steps] == [s["bias"] for s in gr.treated_steps] == [tape.bias[s["date"]] for s in g.treated_steps]
+    assert [s["visible_synthetic_frac"] for s in g.treated_steps] == [
+        s["visible_synthetic_frac"] for s in gr.treated_steps
+    ]
+    assert (
+        [s["bias"] for s in g.treated_steps]
+        == [s["bias"] for s in gr.treated_steps]
+        == [tape.bias[s["date"]] for s in g.treated_steps]
+    )
 
 
 def test_without_feedback_adaptive_arms_inject_identical_documents(small_cfg, small_dataset, detector):

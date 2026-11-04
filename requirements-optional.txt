@@ -2,6 +2,6 @@
 # Install selectively:  pip install -r requirements-optional.txt
 anthropic>=0.30          # API LLM mode (provider=anthropic)
 openai>=1.30             # API LLM mode (provider=openai-compatible)
-yfinance>=0.2.40         # optional public historical data downloader
+yfinance==1.7.0          # real-price runs: scripts/fetch_real_prices.py (tested version)
 # sentence-transformers>=2.7   # optional dense retrieval (large download; TF-IDF is default)
 # statsmodels>=0.14            # optional STL decomposition (fallback: rolling-mean residual)

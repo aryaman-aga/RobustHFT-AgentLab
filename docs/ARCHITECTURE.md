@@ -79,21 +79,22 @@ flowchart LR
 
 | Module | Responsibility | Paper origin | Our extension / simplification |
 |---|---|---|---|
-| `data.synth` | Deterministic OHLCV (3-regime Markov drift, GARCH(1,1) vol) and news whose latent sentiment is ρ-correlated with the next-day return; optional Brownian-bridge minute bars | Paper uses real BTC data + Alpaca news | **Simplification**: synthetic data so the project is offline and reproducible; real CSV/yfinance supported |
+| `data.synth` | Deterministic OHLCV (3-regime Markov drift, GARCH(1,1) vol) and news whose latent sentiment is ρ-correlated with the next-day return; optional Brownian-bridge minute bars | Paper uses real BTC data + Alpaca news | **Simplification**: synthetic data so the project is offline and reproducible; **extension**: `data.source=real` runs on real prices (one historical window per seed, template news about the fictional company) |
 | `features.core` | price, return, 5-day vol, 20-day drawdown, trend divergence, residual anomaly | Eq. 19 | Anomaly = trailing-z residual instead of STL (STL is not online-safe) |
 | `features.micro` | HFT-inspired proxies from OHLCV or intraday buy/sell volume | — | **Extension** |
 | `features.windows` | trailing z-scores, fixed-weight bounded market signal | "normalised windows" | Fixed weights (no fitting ⇒ no leakage) |
 | `grounding.analogs` | cosine top-k over flattened 30-day windows; admissible iff `e+H ≤ t` | "historical analogs and outcomes" | **Extension**: strict admissibility; paper does not state it |
 | `grounding.evidence` | evidence blends market signal with analog forward returns; consistency `c = 1 − |s_text − s_mkt|/2` | "consistency assessment" | Explicit formula |
-| `memory` | date-gated pool with provenance; TF-IDF with IDF fit once on a background corpus | FAISS layered memory | **Simplification**: no FAISS; fixed IDF mimics a frozen embedder |
+| `memory` | date-gated pool with provenance; TF-IDF with IDF fit once on a background corpus; optional detector filter before the top-k cut | FAISS layered memory | **Simplification**: no FAISS; fixed IDF mimics a frozen embedder; **extension**: detection-filter baseline |
 | `misgen.operators` | deterministic operators for all 5 biases, 8 minor types, 2 rewrite styles, and a placebo | App. E prompts | **Simplification**: rule-based stand-ins for LLM prompts; **extension**: placebo |
 | `misgen.sampler` | `w = 1 + αh`, categorical sampling, return-dependent δ | §2.2.3 Eqs. 16–18 | verbatim |
 | `misgen.detector` | logistic regression on 18 interpretable cues, threshold at target clean-FPR | LLM detectability evaluator | **Simplification**; trained only on Φ_Minor outputs so Φ_Rewrite can launder |
-| `misgen.engine` | Algorithm 1 with `max_tries`, feedback update (Eq. 7) | App. E.1 | verbatim structure |
-| `agent.*` | Perception / Profile / Memory / Action, three policy modes | InvestorBench/FinMem agent | Surrogate policy with bias operationalised numerically |
-| `agent.risk` | confidence gate, hold-on-conflict, vol-target sizing, stop/TP, drawdown throttle | — | **Extension** |
+| `misgen.engine` | Algorithm 1 with `max_tries`, feedback update (Eq. 7); optional defense-aware choice among acceptable edits | App. E.1 | verbatim structure; **extension**: evidence-aligned and conflict-seeking attackers |
+| `agent.*` | Perception / Profile / Memory / Action, three policy modes; LLM reader (`agent.text_scorer=llm`) and LLM decider (`agent.mode=llm`) | InvestorBench/FinMem agent | Surrogate policy with bias operationalised numerically; **extension**: the defense layer wraps an LLM reader unchanged; robust-aggregation baseline |
+| `agent.risk` | confidence gate, hold-on-conflict (or shrink-on-conflict), vol-target sizing, stop/TP, drawdown throttle | — | **Extension** |
+| `llm` | provider clients behind one disk cache keyed by every request field; local Ollama (loopback only), Anthropic, OpenAI-compatible, mock | — | **Extension**: offline real-LLM runs, loud failures |
 | `backtest` | next-open execution, bps fees + slippage, no leverage, long-only default | "cumulative return" | Explicit accounting invariants |
-| `evaluation` | paired simulation, MER / MER lift / ASR / net ASR, ablations | Eqs. 8–9, Table 2 | **Extension**: lift, net ASR, defence ablations |
+| `evaluation` | paired simulation, MER / MER lift / ASR / net ASR / cf-ASR / position gap, placebo ladder, frozen replay, ablations, price-impact stress test (`evaluation.impact`) | Eqs. 8–9, Table 2 | **Extension**: lift, net ASR, controls, defense ablations, baselines, price impact |
 
 ## 3. Data flow for one trading day `t`
 
@@ -193,11 +194,12 @@ Grounding therefore leaves consistent text alone and shrinks inconsistent text t
 * **Simulation-only**: no `broker`, `order`, or `execute-live` code path exists; `Backtester.execute` mutates an in-memory `PortfolioState` only.
 * **Provenance is mandatory**: `NewsItem.provenance ∈ {clean, synthetic, placebo}`; `safety_label` is validated non-empty; retrieval returns labels; metrics are computed from labels.
 * **Synthetic text never leaves the process** except into `outputs/` step logs, which are explicitly labelled and git-ignored.
-* **No directional attack objective**: MisGen maximises decision change, not profit for the attacker; there is no code to steer prices.
-* **Keys**: read only from `.env`; YAML cannot carry them; the mock provider is the default.
+* **No directional attack objective**: MisGen maximises decision change, not profit for the attacker; the attacker has no price lever. The price-impact stress test moves the *simulated* price path as a model of market reaction, for both twins alike.
+* **Local LLM only on loopback**: the Ollama client refuses non-local hosts, so prompts with synthetic misinformation never leave the machine. The only data download is yfinance (prices only), done once.
+* **Keys**: read only from `.env`; YAML cannot carry them; the mock provider is the default; a requested provider that cannot be used raises instead of falling back to the mock.
 
 ## 8. Provenance of ideas
 
 * **From the paper**: closed-loop MisGen; bias/minor/rewrite decomposition; similarity + detectability filtering; Pólya-urn history-aware sampling with return-dependent bias boost; clean vs injected comparison; MER, ASR, CR; POMDP agent with Perception/Profile/Memory/Action; time-series-informed grounding with 30-day windows and analog outcomes; ablations w/o filtering/feedback/bias/minor/rewrite.
-* **Our extensions**: microstructure proxies as grounding evidence; explicit risk layer; strict analog admissibility (`e+H ≤ t`); trailing-only normalisation with mutation tests; paired shadow/treated simulation; placebo arm and net ASR; MER lift; defence-side ablations and the robustness–return frontier; retrieval-breadth and κ sweeps; adaptive text-trust memory (off by default); reproducible LLM response cache.
+* **Our extensions**: microstructure proxies as grounding evidence; explicit risk layer; strict analog admissibility (`e+H ≤ t`); trailing-only normalisation with mutation tests; paired shadow/treated simulation; placebo arm, matched placebo ladder and net ASR; frozen-attack replay and common random numbers; one-step counterfactual ASR; MER lift; defense-side ablations and the robustness–return frontier; retrieval-breadth and κ sweeps; adaptive text-trust memory (off by default); reproducible LLM response cache; LLM reader and decider modes on a local model; baseline defenses (text-free agent, detection filter, robust aggregation); defense-aware attackers; shrink-on-conflict; price-impact stress test; real-price mode.
 * **Implementation simplifications**: synthetic data and template news; rule-based operators instead of LLM prompts; feature-based detector instead of an LLM judge; fixed-weight market signal; residual-z anomaly instead of STL; daily-close stop-loss checks; no FAISS.

@@ -1,8 +1,8 @@
 \begin{table}[t]
 \centering
-\caption{Detection rate of the proxy detector by edit type, for the minor edit alone and after each style rewrite (threshold set at 10\% false positives on clean text).}
-\label{tab:detector}
+\rhaltable{\caption{Detection rate of the proxy detector by edit type, for the minor edit alone and after each style rewrite (threshold set at 10\% false positives on clean text).}\label{tab:detector}}{%
 \footnotesize
+\begin{adjustbox}{max width=\linewidth}
 \begin{tabular}{lrrr}
 \toprule
 Edit type & Minor edit & + news rewrite & + academic rewrite \\
@@ -17,4 +17,6 @@ causal & 0.92 & 0.90 & 0.88 \\
 vague attribution & 1.00 & 1.00 & 1.00 \\
 \bottomrule
 \end{tabular}
+\end{adjustbox}
+}
 \end{table}
